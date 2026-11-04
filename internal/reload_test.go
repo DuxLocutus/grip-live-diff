@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -460,6 +461,48 @@ func eventually(t *testing.T, what string, cond func() bool) {
 		}
 	}
 	t.Fatalf("expected %s", what)
+}
+
+// 013-AC3: a page stays listed releaseAfter past its last socket, so a reload keeps it; the
+// registry hears of a page that comes or goes, not of a socket.
+func TestPagesKeptPastTheirLastSocket(t *testing.T) {
+	t.Parallel()
+
+	r := newReloader()
+	r.releaseAfter = 300 * time.Millisecond
+	var mu sync.Mutex
+	changes := 0
+	r.onPages = func() {
+		mu.Lock()
+		defer mu.Unlock()
+		changes++
+	}
+	changed := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return changes
+	}
+	listed := func() bool { return slices.Equal(r.openPages(), []string{"/a.md"}) }
+
+	r.enter("/a.md")
+	r.enter("/a.md")
+	r.leave("/a.md")
+	r.leave("/a.md")
+	time.Sleep(r.releaseAfter / 2)
+	if !listed() || changed() != 1 {
+		t.Fatalf("expected the page listed within the grace, one change, got %v %d", r.openPages(), changed())
+	}
+	// A reload: a socket comes back within the grace, and the first delay must not drop it.
+	r.enter("/a.md")
+	time.Sleep(r.releaseAfter)
+	if !listed() || changed() != 1 {
+		t.Fatalf("expected a reload to keep the page, got %v %d", r.openPages(), changed())
+	}
+	r.leave("/a.md")
+	eventually(t, "the page dropped after the grace", func() bool { return len(r.openPages()) == 0 })
+	if n := changed(); n != 2 {
+		t.Fatalf("expected two changes, got %d", n)
+	}
 }
 
 func TestWatchWalksNothing(t *testing.T) {

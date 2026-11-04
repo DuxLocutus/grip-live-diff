@@ -145,10 +145,12 @@ func scanRegistry(dir string) []instance {
 	return out
 }
 
-// fresh tells an instance that wrote its heartbeat within liveFor from one stopped or asleep.
+// fresh tells an instance that wrote its heartbeat within liveFor from one stopped or asleep; a
+// seen_at as far ahead of the clock is no heartbeat either.
 func fresh(in instance, now time.Time, liveFor time.Duration) bool {
 	t, err := time.Parse(time.RFC3339, in.SeenAt)
-	return err == nil && now.Sub(t) < liveFor
+	d := now.Sub(t)
+	return err == nil && d < liveFor && d > -liveFor
 }
 
 // liveOf keeps the instances of all that wrote their heartbeat within liveFor.

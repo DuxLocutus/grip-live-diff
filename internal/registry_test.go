@@ -223,6 +223,28 @@ func TestScanRegistry(t *testing.T) {
 	}
 }
 
+// A seen_at ahead of the clock (clock stepped back, bad file) is not a heartbeat either.
+func TestFresh(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	for _, tc := range []struct {
+		at   time.Duration
+		want bool
+	}{
+		{0, true},
+		{-registryLive / 2, true},
+		{-2 * registryLive, false},
+		{registryLive / 2, true},
+		{2 * registryLive, false},
+	} {
+		in := instance{SeenAt: now.Add(tc.at).Format(time.RFC3339)}
+		if got := fresh(in, now, registryLive); got != tc.want {
+			t.Errorf("seen_at now%+v: expected %v, got %v", tc.at, tc.want, got)
+		}
+	}
+}
+
 // syncBuffer is the terminal of a served instance; started is closed at the start line.
 type syncBuffer struct {
 	mu      sync.Mutex

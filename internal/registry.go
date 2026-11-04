@@ -334,9 +334,14 @@ func (g *registry) tick() {
 	if g.closed {
 		return
 	}
-	if err := g.write(); err != nil && !g.failLogged {
+	// Logged once per run of failures: past registryLive, the others no longer see this instance.
+	switch err := g.write(); {
+	case err != nil && !g.failLogged:
 		g.failLogged = true
 		log.Println("registry:", err)
+	case err == nil && g.failLogged:
+		g.failLogged = false
+		log.Println("registry: heartbeat written again")
 	}
 	p := g.read()
 	live := p.ports()

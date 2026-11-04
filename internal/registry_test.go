@@ -492,6 +492,42 @@ func TestReadOnlyRegistry(t *testing.T) {
 	}
 }
 
+// A heartbeat that keeps failing is logged once per run of failures; its recovery is logged.
+func TestHeartbeatFailureLogged(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX permissions enforced on a non-root user")
+	}
+	logs := captureLog(t)
+	dir := filepath.Join(t.TempDir(), "instances")
+	g := newRegistry(dir, portA, "/nowhere", &bytes.Buffer{})
+	if err := g.start(); err != nil {
+		t.Fatal(err)
+	}
+	readOnly := func(ro bool) {
+		mode := os.FileMode(0o700)
+		if ro {
+			mode = 0o500
+		}
+		if err := os.Chmod(dir, mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { readOnly(false) })
+
+	readOnly(true)
+	g.tick()
+	g.tick()
+	readOnly(false)
+	g.tick()
+	g.tick()
+	readOnly(true)
+	g.tick()
+	out := logs.String()
+	if failed, back := strings.Count(out, "permission denied"), strings.Count(out, "heartbeat written again"); failed != 2 || back != 1 {
+		t.Fatalf("expected two failures and one recovery logged, got %q", out)
+	}
+}
+
 // routedFixture is a diffFixture whose server is instance A of a registry of its own, with the
 // pages the test sets.
 type routedFixture struct {

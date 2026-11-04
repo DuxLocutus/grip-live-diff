@@ -113,8 +113,8 @@ computed in one place, by gld, not by each agent's script.
   - trigger auto: one line `<sidecar>\t<entry id>` per open entry owned by the instance;
   - trigger manual: when a ready file stands with `pid` null and its owner is the instance, one line
     `<sidecar>\tready`, then the lines of the open entries owned by the instance.
-  The owner of a ready file is the owner rule applied to its `via`. Exit 0 when a line is printed,
-  1 when none. The instance is `--port` and `--pid`:
+  The owner of a ready file is the owner rule applied to its `via`. A sidecar that cannot be read
+  is reported on stderr and skipped. Exit 0 when a line is printed, 1 when none. The instance is `--port` and `--pid`:
   - its PID is dead: nothing is owned, stderr says the instance is gone;
   - its PID is alive and the registry holds no file for it (registry off: the start writes the file
     before the start line): it owns every open entry, today's behaviour;

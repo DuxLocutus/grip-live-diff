@@ -25,7 +25,8 @@ type Pending struct {
 	Out, Err io.Writer
 }
 
-// Run prints the lines and tells whether it printed one.
+// Run prints the lines and tells whether it printed one. A sidecar it cannot read is reported on
+// Err and skipped.
 func (p Pending) Run() (bool, error) {
 	if !pidAlive(p.PID) {
 		_, _ = fmt.Fprintf(p.Err, "instance :%d (pid %d) is gone: nothing is its own\n", p.Port, p.PID)
@@ -45,7 +46,9 @@ func (p Pending) Run() (bool, error) {
 	for _, sc := range sidecars {
 		lines, err := pendingLines(sc, owns, p.Claim)
 		if err != nil {
-			return found, err
+			// One bad sidecar must not hide the entries of the others.
+			_, _ = fmt.Fprintln(p.Err, err)
+			continue
 		}
 		for _, l := range lines {
 			if _, err := fmt.Fprintf(p.Out, "%s\t%s\n", sc, l); err != nil {

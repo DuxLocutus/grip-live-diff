@@ -127,6 +127,20 @@ func TestPending(t *testing.T) {
 	}
 }
 
+// 013-AC12: a sidecar that does not parse is reported and skipped, the others still listed.
+func TestPendingSkipsABadSidecar(t *testing.T) {
+	t.Parallel()
+
+	pf := newPendingFixture(t)
+	pf.write(triggerAuto)
+	// Walked before doc.annotations.json5.
+	writeFile(t, pf.dir, "aa.annotations.json5", "{ bad")
+	ids, found, stderr := pf.run(portA, pf.pidA, 0)
+	if !found || !reflect.DeepEqual(ids, []string{"toA", "gone", "unrouted"}) || !strings.Contains(stderr, "aa.annotations.json5") {
+		t.Fatalf("expected A's entries listed and the bad sidecar on stderr, got %v %v %q", ids, found, stderr)
+	}
+}
+
 // 013-AC12: manual mode lists the batch only for its owner, unclaimed.
 func TestPendingManual(t *testing.T) {
 	t.Parallel()

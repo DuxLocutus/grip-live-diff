@@ -170,7 +170,8 @@ markdown rewritten once, switch the document to **manual** with the auto / manua
 annotation row:
 
 - comments pile up; **Go**, enabled once an entry is open (not done, last message yours), writes
-  `<name>.annotations.ready` beside the sidecar: `{ "sent_at": <RFC 3339>, "pid": null }`;
+  `<name>.annotations.ready` beside the sidecar: `{ "sent_at": <RFC 3339>, "pid": null, "via": <port> }`,
+  `via` absent when routing is off;
 - the agent claims it with `grip-live-diff pending … --claim <its PID>` (below), which sets `pid` and
   `claimed_at` under the sidecar's flock and fails if `pid` is already set; it handles the entries
   the claim lists and deletes the file last. The PID is the one of its long-lived process: in Claude
@@ -199,20 +200,21 @@ choice is kept per tab and document. The server stamps each new reader message w
 port it is routed to: the one chosen, if that instance has the page open and its root contains the
 file, else this instance, else the live instance of lowest port whose root contains it. A message
 routed elsewhere shows **→ :port**, **(gone)** once that instance stopped; the next save hands it to
-the lowest live port. **Go** names the instance the same way and is refused when the batch is
+the live instance of lowest port whose root contains the file. **Go** names the instance the same way and is refused when the batch is
 another instance's or nothing open is routed to it.
 
 An agent learns which entries are its own from gld, not by parsing the sidecar:
 
 ```bash
-grip-live-diff pending --port 6420 --pid 4242 docs/specs      # a sidecar, a markdown file or a directory
+grip-live-diff pending --port 6420 --pid 4242 docs/specs      # a sidecar, markdown or ready file, or a directory
 # docs/specs/toto.annotations.json5	k3f9x2                    # one line per open entry; exit 1 when none
 grip-live-diff pending --port 6420 --pid 4242 --claim "$PPID" docs/specs/toto.annotations.json5
 ```
 
 The port and PID are those of the start line of the instance the agent started. In manual mode a
 `<sidecar><TAB>ready` line comes first when the batch is the instance's and unclaimed; `--claim` takes
-it and prints the entries of the batch. An instance whose PID is dead owns nothing; one that runs
+it and prints the entries of the batch; it takes one sidecar. A sidecar that cannot be read is
+reported on stderr and skipped. An instance whose PID is dead owns nothing; one that runs
 without a registry file (read-only cache directory: routing off, logged once) owns every open
 entry. A Monitor script that wakes the agent only on a change of what it owns:
 

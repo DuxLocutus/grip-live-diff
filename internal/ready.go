@@ -80,7 +80,11 @@ func readReady(p string) readyState {
 	case err != nil, !regular:
 		return readyState{State: readySent}
 	}
-	rf, err := loadReady(p)
+	return stateOf(loadReady(p))
+}
+
+// stateOf is the state of a ready file as loadReady read it.
+func stateOf(rf readyFile, err error) readyState {
 	if err != nil {
 		return readyState{State: readySent}
 	}
@@ -166,7 +170,7 @@ func sendReady(dir http.Dir, target string, rt writeRoute) (readyState, error) {
 	for _, a := range sc.Annotations {
 		if isOpen(a) {
 			open = true
-			owned = owned || rt.owner == nil || rt.owner(lastVia(a)) == rt.via
+			owned = owned || rt.owns(lastVia(a))
 		}
 	}
 	if !open {
@@ -176,16 +180,14 @@ func sendReady(dir http.Dir, target string, rt writeRoute) (readyState, error) {
 	rp := readyPath(dir, target)
 	// Not a regular file is not a batch of ours: replaced, the rename does not follow it.
 	if regular, _ := isRegular(rp); regular {
-		if st := readReady(rp); st.State == readySent || st.State == readyWorking {
-			if rt.owner == nil {
-				return st, nil
+		rf, err := loadReady(rp)
+		if st := stateOf(rf, err); st.State == readySent || st.State == readyWorking {
+			if !rt.owns(st.Via) {
+				return readyState{}, refusal{"batch pending for", rt.owner(st.Via)}
 			}
-			if o := rt.owner(st.Via); o != rt.via {
-				return readyState{}, refusal{"batch pending for", o}
-			}
-			// A garbage file has no via to rewrite: left to the agent that wrote it.
-			rf, err := loadReady(rp)
-			if st.Via == rt.via || err != nil {
+			// A garbage file has no via to rewrite: left to the agent that wrote it. Routing off
+			// knows no owner to rewrite it to.
+			if st.Via == rt.via || err != nil || rt.owner == nil {
 				return st, nil
 			}
 			rf.Via = rt.via

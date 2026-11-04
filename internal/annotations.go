@@ -377,6 +377,11 @@ type writeRoute struct {
 	owner func(via int) int
 }
 
+// owns tells whether the instance via owns a message routed to msgVia; routing off owns all.
+func (rt writeRoute) owns(msgVia int) bool {
+	return rt.owner == nil || rt.owner(msgVia) == rt.via
+}
+
 // route reads the registry once for target: the check of a write, and what the page shows.
 func (s *Server) route(dir http.Dir, target string, asked int) (writeRoute, routingInfo) {
 	key := pageKey(dir, target)

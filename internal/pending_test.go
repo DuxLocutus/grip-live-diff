@@ -141,6 +141,24 @@ func TestPendingSkipsABadSidecar(t *testing.T) {
 	}
 }
 
+// 013-AC12: the key of a sidecar is its directory resolved, whatever path names it.
+func TestPendingResolvesThePath(t *testing.T) {
+	pf := newPendingFixture(t)
+	pf.write(triggerAuto)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(pf.dir, link); err != nil {
+		t.Skip("no symlink here:", err)
+	}
+	t.Chdir(filepath.Dir(pf.dir))
+	for _, path := range []string{link, filepath.Base(pf.dir)} {
+		var out, errOut bytes.Buffer
+		found, err := Pending{Port: portB, PID: pf.pidB, Registry: pf.reg, Paths: []string{path}, Out: &out, Err: &errOut}.Run()
+		if err != nil || !found || !strings.HasSuffix(out.String(), "\ttoB\n") {
+			t.Errorf("%s: expected B's entry, got %v %v %q %q", path, found, err, out.String(), errOut.String())
+		}
+	}
+}
+
 // 013-AC12: manual mode lists the batch only for its owner, unclaimed.
 func TestPendingManual(t *testing.T) {
 	t.Parallel()

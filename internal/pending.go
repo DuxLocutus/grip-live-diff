@@ -100,7 +100,8 @@ func findSidecars(paths []string) ([]string, error) {
 	var out []string
 	for _, p := range paths {
 		if info, err := os.Stat(p); err == nil && info.IsDir() {
-			err := filepath.WalkDir(p, func(q string, d fs.DirEntry, err error) error {
+			// The trailing separator makes WalkDir follow a symlinked directory: it Lstats its root.
+			err := filepath.WalkDir(p+string(filepath.Separator), func(q string, d fs.DirEntry, err error) error {
 				if err != nil {
 					return err
 				}

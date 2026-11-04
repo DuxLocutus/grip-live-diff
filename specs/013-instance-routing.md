@@ -1,6 +1,6 @@
 # 013 — Instance registry and message routing
 
-**Status**: draft
+**Status**: shipped
 **Requested by**: babs
 **Date**: 2026-11-04
 
@@ -77,7 +77,7 @@ computed in one place, by gld, not by each agent's script.
   page can tell a gone `via`. The PUT and the ready POST and DELETE answer with the same fields.
 - The server sends `annotations` to the sockets of a page when its `targets` changes at a registry
   read. The page redraws the banner on each fetch, `poll` included.
-- The page shows a banner above the annotations when `targets` holds a port other than `self`:
+- The page shows a banner above the document when `targets` holds a port other than `self`:
   "Also open in :6419. Send to: [:6420 (this page) ▾]". The selector lists `targets`. The choice
   is kept in `sessionStorage` per path, so a reload keeps it; a stored port no longer in `targets`
   falls back to the first of `targets`. The banner goes when no other port is left.
@@ -149,53 +149,53 @@ computed in one place, by gld, not by each agent's script.
 
 ## Acceptance criteria
 
-- [ ] **AC1** Given an instance started on `docs/specs/`, its file `<pid>.json` exists with its
+- [x] **AC1** Given an instance started on `docs/specs/`, its file `<pid>.json` exists with its
       port, PID and `root` = `docs/specs` resolved before the start line, which shows the PID;
       `seen_at` is rewritten within 15 s. Given `--no-reload`, the file exists with `pages: []`.
-- [ ] **AC2** Given a port already taken, the instance stops with no start line and no registry
+- [x] **AC2** Given a port already taken, the instance stops with no start line and no registry
       file.
-- [ ] **AC3** Given a page opened, the file lists its sidecar key at once; 30 s after its last
+- [x] **AC3** Given a page opened, the file lists its sidecar key at once; 30 s after its last
       socket closed, it does not; a reload in between keeps it listed.
-- [ ] **AC4** Given a registry file whose PID is dead, a start, a read or `pending` removes it;
+- [x] **AC4** Given a registry file whose PID is dead, a start, a read or `pending` removes it;
       given a live PID and an old `seen_at`, no read reports it and none removes it.
-- [ ] **AC5** Given SIGINT or SIGTERM, the instance removes its file.
-- [ ] **AC6** Given a read-only registry dir, the server serves pages, logs once, the annotations
+- [x] **AC5** Given SIGINT or SIGTERM, the instance removes its file.
+- [x] **AC6** Given a read-only registry dir, the server serves pages, logs once, the annotations
       API reports no other target and writes no `via`; `pending` for that instance lists every open
       entry.
-- [ ] **AC7** Given the same file open in A and B, B serving a parent dir through a symlinked
+- [x] **AC7** Given the same file open in A and B, B serving a parent dir through a symlinked
       directory, A reports `targets` = [A, B] and `self` = A, and prints the warning line once.
       Given a symlinked file, the two pages do not share a key, and A started on the directory of
       the link contains it. Given B whose root does not contain the file, B is not in `targets`.
       Given A with `--no-reload`, A is first of its own `targets`.
-- [ ] **AC8** Given a page open only in A, whose root contains it, a new reader message through A
+- [x] **AC8** Given a page open only in A, whose root contains it, a new reader message through A
       gets `via` = A. Given a file outside the root of A (served through `../`) and B live whose
       root contains it, page open in B or not, `via` = B; with no such instance, no `via`. Given C
       on another tree that took the port of a dead `via`, the owner is not C.
-- [ ] **AC9** Given `targets` = [A, B], a PUT naming B writes `via` = B; naming a port not in
+- [x] **AC9** Given `targets` = [A, B], a PUT naming B writes `via` = B; naming a port not in
       `targets` writes `via` = A; a `via` set on a message of the list is ignored; the PUT answer
       holds `self`, `targets` and `live`.
-- [ ] **AC10** Given an edit of an earlier reader message, its `via` is unchanged. Given an open
+- [x] **AC10** Given an edit of an earlier reader message, its `via` is unchanged. Given an open
       entry whose `via` is gone and whose owner is A, a PUT through B naming B re-stamps its last
       reader message with `via` = A.
-- [ ] **AC11** Given manual mode, Go naming B writes the ready file with `via` = B and the GET
+- [x] **AC11** Given manual mode, Go naming B writes the ready file with `via` = B and the GET
       reports it; a Go naming A while it stands is refused with the pending port; a Go naming B
       again writes nothing; a Go naming a port that owns no open entry is refused; an agent rewrite
       with `pid` set keeps `via`. Given a ready file whose `via` is gone and whose owner is A, a Go
       naming A rewrites `via` = A.
-- [ ] **AC12** `pending`: given entries routed to A, to B, gone, and absent, `--port A` lists A's
+- [x] **AC12** `pending`: given entries routed to A, to B, gone, and absent, `--port A` lists A's
       and those whose owner is A by the lowest-port rule, exit 0; `--port B` lists only B's;
       given a dead `--pid`, nothing, exit 1; given a manual sidecar, `ready` and its entries only
       when the ready file is A's and unclaimed; given A's file with an old `seen_at`, nothing; given
       no file and a live PID, every open entry. `--claim` writes `pid` only when the ready file is
       still A's and unclaimed under the flock: given it replaced by a ready file of B between
       `pending` and `--claim`, exit 1 and nothing written.
-- [ ] **AC13** The sidecar header names `grip-live-diff pending`, the start line as the source of
+- [x] **AC13** The sidecar header names `grip-live-diff pending`, the start line as the source of
       port and PID, the ready file rule, and holds no absolute path.
-- [ ] **AC14** Given B starts with the page open in A, the banner appears in A's page without a
+- [x] **AC14** Given B starts with the page open in A, the banner appears in A's page without a
       reload within 30 s; the selector sends the next message to B, the message shows "→ :B", and
       the choice survives a reload; when B stops, the banner goes within 45 s and the message shows
       "(gone)" once B's file is removed (headless run).
-- [ ] **AC15** `go test ./...` green, `GOOS=windows go build ./...` green.
+- [x] **AC15** `go test ./...` green, `GOOS=windows go build ./...` green.
 
 ## Phases
 

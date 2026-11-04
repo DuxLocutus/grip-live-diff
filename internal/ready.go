@@ -30,11 +30,17 @@ const (
 )
 
 var (
-	errNotManual    = errors.New("trigger is not manual")
-	errNothingOpen  = errors.New("no open entry")
-	errNotOwned     = errors.New("nothing open for")
-	errBatchPending = errors.New("batch pending for")
+	errNotManual   = errors.New("trigger is not manual")
+	errNothingOpen = errors.New("no open entry")
 )
+
+// refusal is a Go refused because of the instance on port: "nothing open for :6420".
+type refusal struct {
+	reason string
+	port   int
+}
+
+func (e refusal) Error() string { return fmt.Sprintf("%s :%d", e.reason, e.port) }
 
 // readyFile is what the preview writes when the reader sends a batch; the agent sets PID
 // and claimed_at when it takes it. Via is the port of the instance the batch is for.
@@ -175,7 +181,7 @@ func sendReady(dir http.Dir, target string, rt writeRoute) (readyState, error) {
 				return st, nil
 			}
 			if o := rt.owner(st.Via); o != rt.via {
-				return readyState{}, fmt.Errorf("%w :%d", errBatchPending, o)
+				return readyState{}, refusal{"batch pending for", o}
 			}
 			// A garbage file has no via to rewrite: left to the agent that wrote it.
 			rf, err := loadReady(rp)
@@ -191,7 +197,7 @@ func sendReady(dir http.Dir, target string, rt writeRoute) (readyState, error) {
 		}
 	}
 	if !owned {
-		return readyState{}, fmt.Errorf("%w :%d", errNotOwned, rt.via)
+		return readyState{}, refusal{"nothing open for", rt.via}
 	}
 	now := time.Now().Format(time.RFC3339)
 	if err := writeReady(rp, readyFile{SentAt: &now, Via: rt.via}); err != nil {
@@ -261,7 +267,7 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request, dir http.Di
 		return
 	}
 	switch {
-	case errors.Is(err, errNotManual), errors.Is(err, errNothingOpen), errors.Is(err, errNotOwned), errors.Is(err, errBatchPending):
+	case errors.Is(err, errNotManual), errors.Is(err, errNothingOpen), errors.As(err, new(refusal)):
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	case err != nil:

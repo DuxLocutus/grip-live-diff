@@ -151,9 +151,22 @@ func newAnnotationID() string {
 // sidecarPath maps a markdown URL path to its sidecar on disk, confined to dir the same
 // way http.Dir confines its opens.
 func sidecarPath(dir http.Dir, target string) string {
-	clean := path.Clean("/" + target)
-	name := strings.TrimSuffix(clean, path.Ext(clean)) + sidecarSuffix
-	return filepath.Join(string(dir), filepath.FromSlash(name))
+	return filepath.Join(string(dir), filepath.FromSlash(sidecarOf(path.Clean("/"+target))))
+}
+
+// sidecarOf names the sidecar of the document at p, a URL path or a file path.
+func sidecarOf(p string) string {
+	return strings.TrimSuffix(p, filepath.Ext(p)) + sidecarSuffix
+}
+
+// readyOf names the ready file beside the sidecar at p.
+func readyOf(p string) string {
+	return strings.TrimSuffix(p, sidecarSuffix) + readySuffix
+}
+
+// sidecarOfReady names the sidecar beside the ready file at p.
+func sidecarOfReady(p string) string {
+	return strings.TrimSuffix(p, readySuffix) + sidecarSuffix
 }
 
 // isMarkdownTarget accepts only a markdown path of this server: no other host, no other

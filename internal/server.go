@@ -290,7 +290,7 @@ func (s *Server) startRegistry(dir http.Dir, root string) {
 	}
 	// A change of targets is told as a change of the sidecar: the page refetches alike.
 	g.notify = func(page string) {
-		s.reload.broadcast(strings.TrimSuffix(page, path.Ext(page)) + sidecarSuffix)
+		s.reload.broadcast(sidecarOf(page))
 	}
 	if err := g.start(); err != nil {
 		log.Printf("instance registry off: %v", err)

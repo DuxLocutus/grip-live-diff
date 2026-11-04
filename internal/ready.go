@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/titanous/json5"
@@ -63,7 +62,7 @@ type readyResponse struct {
 
 // readyPath is the ready file beside target's sidecar, confined like it.
 func readyPath(dir http.Dir, target string) string {
-	return strings.TrimSuffix(sidecarPath(dir, target), sidecarSuffix) + readySuffix
+	return readyOf(sidecarPath(dir, target))
 }
 
 // readReady reports the state of the ready file at p. A file that does not parse reads as

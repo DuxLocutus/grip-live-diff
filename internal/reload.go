@@ -289,10 +289,10 @@ func pageMessage(page string, resources []string, changed map[string]struct{}) s
 		}
 	}
 	base := strings.TrimSuffix(page, path.Ext(page))
-	if _, ok := changed[base+sidecarSuffix]; ok {
+	if _, ok := changed[sidecarOf(page)]; ok {
 		return msgAnnotations
 	}
-	if _, ok := changed[base+readySuffix]; ok {
+	if _, ok := changed[readyOf(sidecarOf(page))]; ok {
 		return msgAnnotations
 	}
 	revisions := base + revisionsSuffix

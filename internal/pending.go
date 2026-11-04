@@ -117,9 +117,9 @@ func findSidecars(paths []string) ([]string, error) {
 		case strings.HasSuffix(p, sidecarSuffix):
 			out = append(out, p)
 		case strings.HasSuffix(p, readySuffix):
-			out = append(out, strings.TrimSuffix(p, readySuffix)+sidecarSuffix)
+			out = append(out, sidecarOfReady(p))
 		default:
-			out = append(out, strings.TrimSuffix(p, filepath.Ext(p))+sidecarSuffix)
+			out = append(out, sidecarOf(p))
 		}
 	}
 	return out, nil
@@ -172,7 +172,7 @@ func pendingLines(p string, owns func(key string, via int) bool, claim int64) ([
 		}
 		return lines, nil
 	}
-	rp := strings.TrimSuffix(p, sidecarSuffix) + readySuffix
+	rp := readyOf(p)
 	if regular, _ := isRegular(rp); !regular {
 		return nil, nil
 	}

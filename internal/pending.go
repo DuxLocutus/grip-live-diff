@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -158,7 +159,7 @@ func pendingLines(p string, owns func(key string, via int) bool, claim int64) ([
 	if err != nil {
 		return nil, err
 	}
-	key := filepath.Join(resolveDir(filepath.Dir(p)), name)
+	key := pageKey(http.Dir(filepath.Dir(p)), name)
 
 	var lines []string
 	for _, a := range sc.Annotations {

@@ -66,6 +66,15 @@ const banner = () =>
     return { shown: !!b && !b.hidden, text: b ? b.textContent : null, via: s ? s.value : null, marker: window.__marker || null } })()`);
 const labels = () => ev(`[...document.querySelectorAll(".annotations-list .annot-msg-reader small")].map((s) => s.textContent)`);
 
+// registryFiles finds the registry file of pid. macOS keeps the user cache under HOME; Linux
+// under XDG_CACHE_HOME, which run.sh sets in <work>/cache.
+function registryFiles(pid) {
+  return ["home", "cache"]
+    .filter((d) => fs.existsSync(path.join(work, d)))
+    .flatMap((d) => fs.readdirSync(path.join(work, d), { recursive: true }))
+    .filter((f) => f.endsWith(`instances${path.sep}${pid}.json`));
+}
+
 // startB runs B on the docs directory, with the HOME of A, and resolves on its start line.
 function startB() {
   const b = spawn(path.join(work, "gld"), ["-b=false", "-H", "127.0.0.1", "-p", portB, docs], { env: Object.assign({}, process.env, { HOME: path.join(work, "home") }) });
@@ -116,6 +125,7 @@ function startB() {
 
   // B starts and opens the page in a second tab.
   const b = await startB();
+  check("B's registry file written", registryFiles(b.pid).length === 1, registryFiles(b.pid));
   const tab = await (await fetch(`${cdp}/json/new?${encodeURIComponent(pageB)}`, { method: "PUT" })).json();
   const t0 = Date.now();
   const shown = await waitFor(`(() => { const b = document.querySelector(".annotations-banner"); return !b.hidden })()`, 30000).catch(() => -1);
@@ -147,9 +157,7 @@ function startB() {
   const gone = await waitFor(`document.querySelector(".annotations-banner").hidden`, 45000).catch(() => -1);
   check("banner gone within 45 s of B stopping (" + (Date.now() - t1) + " ms, A " + visibility + ")", gone >= 0, await banner());
   await fetch(`${cdp}/json/close/${tab.id}`);
-  // macOS keeps the user cache under HOME; Linux under XDG_CACHE_HOME, which run.sh sets in <work>/cache.
-  const registry = ["home", "cache"].filter((d) => fs.existsSync(path.join(work, d))).flatMap((d) => fs.readdirSync(path.join(work, d), { recursive: true })).filter((f) => f.endsWith(`instances${path.sep}${b.pid}.json`));
-  check("B's registry file removed", registry.length === 0, registry);
+  check("B's registry file removed", registryFiles(b.pid).length === 0, registryFiles(b.pid));
   await waitFor(`[...document.querySelectorAll(".annotations-list .annot-msg-reader small")].some((s) => s.textContent.endsWith("(gone)"))`, 5000).catch(() => {});
   check("message shows (gone)", (await labels())[0].endsWith("→ :" + portB + " (gone)"), await labels());
 

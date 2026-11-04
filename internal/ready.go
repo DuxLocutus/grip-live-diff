@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -51,6 +50,12 @@ type readyState struct {
 	SentAt *string `json:"sent_at"`
 }
 
+// readyResponse is the ready state with the registry read, as the annotations GET has it.
+type readyResponse struct {
+	readyState
+	routing
+}
+
 // readyPath is the ready file beside target's sidecar, confined like it.
 func readyPath(dir http.Dir, target string) string {
 	return strings.TrimSuffix(sidecarPath(dir, target), sidecarSuffix) + readySuffix
@@ -82,8 +87,7 @@ func readReady(p string) readyState {
 	switch {
 	case rf.PID == nil:
 		st.State = readySent
-	// Out of range, Kill would truncate the PID to another, live, process.
-	case *rf.PID > 0 && *rf.PID <= math.MaxInt32 && processAlive(int(*rf.PID)):
+	case pidAlive(*rf.PID):
 		st.State = readyWorking
 	default:
 		st.State = readyGone
@@ -211,7 +215,8 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request, dir http.Di
 
 	setNoCacheHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(st); err != nil {
+	resp := readyResponse{readyState: st, routing: s.peers().routing(s.port, pageKey(dir, target))}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Println(err)
 	}
 }

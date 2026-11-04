@@ -126,6 +126,7 @@ type sidecar struct {
 // tell a comment written against an older version.
 type annotationsResponse struct {
 	sidecar
+	routing
 	Hash  string     `json:"hash"`
 	Ready readyState `json:"ready"`
 }
@@ -553,6 +554,7 @@ func (s *Server) handleAnnotations(w http.ResponseWriter, r *http.Request, dir h
 		return
 	}
 
+	p := s.peers()
 	var sc sidecar
 	switch r.Method {
 	case http.MethodGet:
@@ -585,7 +587,7 @@ func (s *Server) handleAnnotations(w http.ResponseWriter, r *http.Request, dir h
 
 	setNoCacheHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
-	resp := annotationsResponse{sidecar: sc, Hash: fileHash(content), Ready: readReady(readyPath(dir, target))}
+	resp := annotationsResponse{sidecar: sc, routing: p.routing(s.port, pageKey(dir, target)), Hash: fileHash(content), Ready: readReady(readyPath(dir, target))}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Println(err)
 	}

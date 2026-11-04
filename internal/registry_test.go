@@ -577,7 +577,8 @@ func TestSharedPage(t *testing.T) {
 	}
 }
 
-// The sockets of a page are told when its targets change at a registry read, not otherwise.
+// The sockets of a page are told when its targets or the live instances change at a registry
+// read, not otherwise.
 func TestTargetsChangeNotifiesThePage(t *testing.T) {
 	t.Parallel()
 
@@ -601,6 +602,22 @@ func TestTargetsChangeNotifiesThePage(t *testing.T) {
 	rf.g.tick()
 	if n := rf.notified(); n != 2 {
 		t.Fatalf("expected a notice when B goes, got %d", n)
+	}
+
+	// C never opens the page, but a message may be routed to it: its going shows "(gone)".
+	pidC := livePID(t)
+	rf.peer(pidC, portC, filepath.Dir(rf.key), false)
+	rf.g.tick()
+	if n := rf.notified(); n != 3 {
+		t.Fatalf("expected a notice when C starts, got %d", n)
+	}
+	if err := os.Remove(filepath.Join(rf.reg, strconv.FormatInt(pidC, 10)+".json")); err != nil {
+		t.Fatal(err)
+	}
+	rf.g.tick()
+	rf.g.tick()
+	if n := rf.notified(); n != 4 {
+		t.Fatalf("expected one notice when C goes, got %d", n)
 	}
 }
 

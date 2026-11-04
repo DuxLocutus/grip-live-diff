@@ -75,8 +75,8 @@ computed in one place, by gld, not by each agent's script.
   if its root contains the file, listed or not; then the other live instances whose root contains
   the file and that list the page, sorted. `live` lists the ports of every live instance, so the
   page can tell a gone `via`. The PUT and the ready POST and DELETE answer with the same fields.
-- The server sends `annotations` to the sockets of a page when its `targets` changes at a registry
-  read. The page redraws the banner on each fetch, `poll` included.
+- The server sends `annotations` to the sockets of a page when its `targets` or `live` changes at a
+  registry read. The page redraws the banner on each fetch, `poll` included.
 - The page shows a banner above the document when `targets` holds a port other than `self`:
   "Also open in :6419. Send to: [:6420 (this page) ▾]". The selector lists `targets`. The choice
   is kept in `sessionStorage` per path, so a reload keeps it; a stored port no longer in `targets`

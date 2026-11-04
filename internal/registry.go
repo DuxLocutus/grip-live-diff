@@ -244,6 +244,7 @@ type registry struct {
 	failLogged bool
 	warned     map[string]struct{} // sidecar key + PID of the other instance
 	targets    map[string][]int    // URL path -> targets at the last read
+	live       []int               // ports at the last read; nil before the first
 	stop       chan struct{}
 }
 
@@ -312,7 +313,8 @@ func (g *registry) read() peers {
 }
 
 // tick rewrites the file of this instance, reads the others, warns of a page newly shared and
-// tells a page whose targets changed.
+// tells a page whose targets changed, or every page when the live instances changed: a message
+// may be routed to an instance that never had the page.
 func (g *registry) tick() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -324,6 +326,9 @@ func (g *registry) tick() {
 		log.Println("registry:", err)
 	}
 	p := g.read()
+	live := p.ports()
+	liveChanged := g.live != nil && !slices.Equal(g.live, live)
+	g.live = live
 	open := g.pages()
 	for page, key := range open {
 		for _, in := range p.live {
@@ -343,7 +348,9 @@ func (g *registry) tick() {
 		}
 		// First seen: the page fetched its targets as it loaded; only a banner is worth a refetch.
 		t := p.targets(key)
-		if prev, ok := g.targets[page]; ok && !slices.Equal(prev, t) || !ok && len(t) > 1 {
+		prev, seen := g.targets[page]
+		changed := seen && (liveChanged || !slices.Equal(prev, t))
+		if changed || (!seen && len(t) > 1) {
 			g.notify(page)
 		}
 		g.targets[page] = t

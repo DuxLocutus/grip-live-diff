@@ -165,6 +165,11 @@ func readyOf(p string) string {
 	return strings.TrimSuffix(p, sidecarSuffix) + readySuffix
 }
 
+// revisionsOf names the directory of kept copies beside the sidecar at p.
+func revisionsOf(p string) string {
+	return strings.TrimSuffix(p, sidecarSuffix) + revisionsSuffix
+}
+
 // sidecarOfReady names the sidecar beside the ready file at p.
 func sidecarOfReady(p string) string {
 	return strings.TrimSuffix(p, readySuffix) + sidecarSuffix
@@ -184,7 +189,7 @@ func isRevisionTarget(target string) bool {
 
 // revisionsDir is the directory holding the copies of target's annotated versions.
 func revisionsDir(dir http.Dir, target string) string {
-	return strings.TrimSuffix(sidecarPath(dir, target), sidecarSuffix) + revisionsSuffix
+	return revisionsOf(sidecarPath(dir, target))
 }
 
 // revisionName is the file name of the copy for hash: twelve hex characters are plenty

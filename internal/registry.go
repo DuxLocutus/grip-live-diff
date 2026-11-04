@@ -298,7 +298,6 @@ func (g *registry) self() instance {
 // start writes the file of this instance, once the files of dead instances are removed. An
 // error turns routing off.
 func (g *registry) start() error {
-	// The roots and open pages of the user are for the user only.
 	if err := os.MkdirAll(g.dir, 0o700); err != nil {
 		return err
 	}

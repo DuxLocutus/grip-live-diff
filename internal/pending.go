@@ -48,7 +48,6 @@ func (p Pending) Run() (bool, error) {
 	for _, sc := range sidecars {
 		lines, err := pendingLines(sc, owns, p.Claim)
 		if err != nil {
-			// One bad sidecar must not hide the entries of the others.
 			_, _ = fmt.Fprintln(p.Err, err)
 			continue
 		}

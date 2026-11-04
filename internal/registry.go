@@ -298,7 +298,8 @@ func (g *registry) self() instance {
 // start writes the file of this instance, once the files of dead instances are removed. An
 // error turns routing off.
 func (g *registry) start() error {
-	if err := os.MkdirAll(g.dir, 0o755); err != nil { //nolint:gosec // a cache dir, readable like any other
+	// The roots and open pages of the user are for the user only.
+	if err := os.MkdirAll(g.dir, 0o700); err != nil {
 		return err
 	}
 	scanRegistry(g.dir)
@@ -310,7 +311,7 @@ func (g *registry) write() error {
 	if err != nil {
 		return err
 	}
-	return replaceFile(g.path(), "."+filepath.Base(g.path())+"-*", 0o644, append(data, '\n'))
+	return replaceFile(g.path(), "."+filepath.Base(g.path())+"-*", 0o600, append(data, '\n'))
 }
 
 // read returns the live instances: the others from their files, this one as it stands.

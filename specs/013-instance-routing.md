@@ -51,7 +51,7 @@ computed in one place, by gld, not by each agent's script.
   of the file as served. From a sidecar: its directory resolved, joined with its `file`. Two pages share a key exactly when they share a sidecar: a symlinked
   directory is followed, a symlinked file is not, as `sidecarPath` does not follow it.
 - An instance writes only its own file, to a temp file then renamed. It reads the files of the
-  others, never locks them.
+  others, never locks them. The directory and the files are private to the user (0700, 0600).
 - Every 15 s the instance rewrites its file (`seen_at`) and reads the others. It rewrites at once
   when its page list changes.
 - A page is listed while a socket of the instance follows it, and 30 s after the last one closed,

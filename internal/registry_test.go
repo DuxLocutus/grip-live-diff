@@ -358,6 +358,14 @@ func TestServeRegistersTheInstance(t *testing.T) {
 			if !ok || in.Port != inst.port || in.PID != int64(os.Getpid()) || in.Root != resolveDir(docs) || in.Pages == nil || len(in.Pages) != 0 {
 				t.Fatalf("expected port %d, PID, root %q and no page, got %+v", inst.port, resolveDir(docs), in)
 			}
+			// The roots and pages of the user are not for the other users of the host.
+			if runtime.GOOS != "windows" {
+				d, _ := os.Stat(reg)
+				f, _ := os.Stat(filepath.Join(reg, strconv.Itoa(os.Getpid())+".json"))
+				if d.Mode().Perm() != 0o700 || f.Mode().Perm() != 0o600 {
+					t.Fatalf("expected the registry private to the user, got %v %v", d.Mode(), f.Mode())
+				}
+			}
 			// seen_at has a second's precision.
 			first := in.SeenAt
 			deadline := time.Now().Add(3 * time.Second)

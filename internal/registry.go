@@ -124,7 +124,8 @@ func scanRegistry(dir string) []instance {
 	var out []instance
 	for _, e := range entries {
 		m := instanceFileName.FindStringSubmatch(e.Name())
-		if m == nil {
+		// Not a file an instance writes: a FIFO would block the open, a directory the removal.
+		if m == nil || !e.Type().IsRegular() {
 			continue
 		}
 		p := filepath.Join(dir, e.Name())

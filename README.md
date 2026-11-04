@@ -200,8 +200,8 @@ choice is kept per tab and document. The server stamps each new reader message w
 port it is routed to: the one chosen, if that instance has the page open and its root contains the
 file, else this instance, else the live instance of lowest port whose root contains it. A message
 routed elsewhere shows **→ :port**, **(gone)** once that instance stopped; the next save hands it to
-the live instance of lowest port whose root contains the file. **Go** names the instance the same way and is refused when the batch is
-another instance's or nothing open is routed to it.
+the live instance of lowest port whose root contains the file. **Go** names the instance the same
+way and is refused when the batch is another instance's or nothing open is routed to it.
 
 An agent learns which entries are its own from gld, not by parsing the sidecar:
 

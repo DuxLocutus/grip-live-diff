@@ -62,8 +62,9 @@ embed, so a large tree (`node_modules`, build output) costs nothing until a page
 | `--bounding-box`      | `true`      | Draw the GitHub-style box around the document                      |
 | `--version`           |             | Print version and commit                                           |
 
-The page title comes from the file name (`my-guide_v2.md` becomes `My Guide V2`). `Ctrl-C` stops the
-server.
+The start line names the port and the PID of the instance:
+`🚀 Starting server: http://localhost:6419/README.md (pid 4242)`. The page title comes from the file
+name (`my-guide_v2.md` becomes `My Guide V2`). `Ctrl-C` stops the server.
 
 ## Seeing what changed
 
@@ -170,16 +171,59 @@ annotation row:
 
 - comments pile up; **Go**, enabled once an entry is open (not done, last message yours), writes
   `<name>.annotations.ready` beside the sidecar: `{ "sent_at": <RFC 3339>, "pid": null }`;
-- the agent claims it under the sidecar's flock by setting `pid` and `claimed_at`, leaves it if `pid`
-  is already set, handles every open entry and deletes the file last. The PID is the one of its
-  long-lived process, taken before the flock: in Claude Code the shell's `$PPID`, read outside
-  `flock -c`;
-- the button reads **Sent** until claimed, **Agent working · pid N** while that process lives,
+- the agent claims it with `grip-live-diff pending … --claim <its PID>` (below), which sets `pid` and
+  `claimed_at` under the sidecar's flock and fails if `pid` is already set; it handles the entries
+  the claim lists and deletes the file last. The PID is the one of its long-lived process: in Claude
+  Code the shell's `$PPID`;
+- the button reads **Sent → :port** until claimed, **Agent working · pid N** while that process lives,
   **Agent gone · pid N** once it exited, where Go sends again; **✕** cancels the batch by removing
   the file. The page follows the file without reloading, and checks a working agent every 5 s;
 - a ready file in auto is stale: switching to auto, or any save in auto, drops it;
 - with **Hold reload while sent** on in the settings menu, a markdown change waits while the batch
   is sent or worked on, then reloads once the file is gone or the agent is.
+
+### Several instances on one file
+
+Two instances can serve the same file, `grip-live-diff -p 6419 docs/` for one agent session and
+`grip-live-diff -p 6420 docs/specs/` for another, sharing its sidecar. Each instance keeps a file in
+a registry under the user cache directory (`~/.cache/grip-live-diff/instances/` on Linux,
+`~/Library/Caches/grip-live-diff/instances/` on macOS), `<pid>.json` with its port, PID, root (the
+start argument, resolved) and the pages open in it. It rewrites it every 15 s and removes it on
+`Ctrl-C` or `SIGTERM`; an instance not seen for 60 s is ignored, the file of a dead PID removed.
+The terminal says when a page is open elsewhere too:
+`⚠ specs/toto.md also open in :6419 (pid 4242)`.
+
+A page open in another instance shows a banner above the document, *Also open in :6419. Send to:
+[:6420 (this page)]*, whose selector picks the instance whose agent gets the next message; the
+choice is kept per tab and document. The server stamps each new reader message with `via`, the
+port it is routed to: the one chosen, if that instance has the page open and its root contains the
+file, else this instance, else the live instance of lowest port whose root contains it. A message
+routed elsewhere shows **→ :port**, **(gone)** once that instance stopped; the next save hands it to
+the lowest live port. **Go** names the instance the same way and is refused when the batch is
+another instance's or nothing open is routed to it.
+
+An agent learns which entries are its own from gld, not by parsing the sidecar:
+
+```bash
+grip-live-diff pending --port 6420 --pid 4242 docs/specs      # a sidecar, a markdown file or a directory
+# docs/specs/toto.annotations.json5	k3f9x2                    # one line per open entry; exit 1 when none
+grip-live-diff pending --port 6420 --pid 4242 --claim "$PPID" docs/specs/toto.annotations.json5
+```
+
+The port and PID are those of the start line of the instance the agent started. In manual mode a
+`<sidecar><TAB>ready` line comes first when the batch is the instance's and unclaimed; `--claim` takes
+it and prints the entries of the batch. An instance whose PID is dead owns nothing; one that runs
+without a registry file (read-only cache directory: routing off, logged once) owns every open
+entry. A Monitor script that wakes the agent only on a change of what it owns:
+
+```bash
+last=
+while sleep 2; do
+  now=$(grip-live-diff pending --port 6420 --pid 4242 docs/specs)
+  [ -n "$now" ] && [ "$now" != "$last" ] && printf '%s\n' "$now"
+  last=$now
+done
+```
 
 ## Toolbar
 
@@ -241,8 +285,8 @@ mise run test
 mise run lint
 ```
 
-`scripts/e2e/run.sh` drives headless Chrome through the manual trigger UI (needs go, node 22+,
-curl and Chrome; not run in CI).
+`scripts/e2e/run.sh` drives headless Chrome through the manual trigger UI and the instance banner on
+two ports (needs go, node 22+, curl and Chrome; about two minutes; not run in CI).
 
 Features start as a spec in [`specs/`](specs/README.md) before any code. `release.sh` builds the
 release matrix and the checksum file; the `Build and release` workflow runs it on every `v*` tag.

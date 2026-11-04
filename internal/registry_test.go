@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -103,6 +104,7 @@ func TestPeers(t *testing.T) {
 		{"gone via: lowest port", portA, []instance{a, b}, 7000, 0, portA, portA, []int{portA, portB}, []int{portA, portB}},
 		{"self outside: B, open or not", portC, []instance{bClosed, c}, 0, 0, portB, portB, []int{}, []int{portB, portC}},
 		{"self outside, B has it open", portC, []instance{b, c}, 0, 0, portB, portB, []int{portB}, []int{portB, portC}},
+		{"port taken again on another tree", portA, []instance{a, c}, portC, portC, portA, portA, []int{portA}, []int{portA, portC}},
 		{"no instance contains it", portC, []instance{c}, portC, portC, 0, 0, []int{}, []int{portC}},
 		{"routing off", 0, nil, portA, portA, 0, 0, []int{}, []int{}},
 	} {
@@ -452,6 +454,17 @@ func TestReadOnlyRegistry(t *testing.T) {
 	if err != nil || got.Self != inst.port || len(got.Targets) != 0 || len(got.Live) != 0 {
 		t.Fatalf("expected self and no target, got %+v %v", got.routing, err)
 	}
+	req, _ := http.NewRequest(http.MethodPut, base+"/__annotations?path=/doc.md", strings.NewReader(fmt.Sprintf(`{"via":%d,"annotations":[{"exact":null,"thread":[{"by":"reader","text":"fix"}]}]}`, inst.port)))
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = annotationsResponse{}
+	err = json.NewDecoder(resp.Body).Decode(&got)
+	resp.Body.Close() //nolint:errcheck
+	if err != nil || len(got.Annotations) != 1 || got.Annotations[0].Thread[0].Via != 0 {
+		t.Fatalf("expected no via written, got %+v %v", got.Annotations, err)
+	}
 	if n := strings.Count(logs.String(), "instance registry off"); n != 1 {
 		t.Fatalf("expected one log line, got %d: %s", n, logs)
 	}
@@ -472,12 +485,18 @@ type routedFixture struct {
 
 func newRoutedFixture(t *testing.T, content string) *routedFixture {
 	t.Helper()
+	return newRoutedFixtureOn(t, content, portA)
+}
+
+// newRoutedFixtureOn is newRoutedFixture with the server on port.
+func newRoutedFixtureOn(t *testing.T, content string, port int) *routedFixture {
+	t.Helper()
 	f := &diffFixture{t: t, dir: t.TempDir()}
-	s := NewServer("localhost", portA, false, false, false, NewParser(), "", "")
+	s := NewServer("localhost", port, false, false, false, NewParser(), "", "")
 	f.handler = s.newHandler(http.Dir(f.dir))
 	f.write(content)
 	rf := &routedFixture{diffFixture: f, reg: t.TempDir(), key: pageKey(http.Dir(f.dir), docPath), out: &bytes.Buffer{}, open: map[string]string{}}
-	rf.g = newRegistry(rf.reg, portA, resolveDir(f.dir), rf.out)
+	rf.g = newRegistry(rf.reg, port, resolveDir(f.dir), rf.out)
 	rf.g.pages = func() map[string]string {
 		rf.mu.Lock()
 		defer rf.mu.Unlock()
@@ -582,5 +601,189 @@ func TestTargetsChangeNotifiesThePage(t *testing.T) {
 	rf.g.tick()
 	if n := rf.notified(); n != 2 {
 		t.Fatalf("expected a notice when B goes, got %d", n)
+	}
+}
+
+// writeRouted writes, as an agent would, a sidecar of one open entry per via, ids e0, e1...;
+// via 0 leaves the key out.
+func (rf *routedFixture) writeRouted(trigger string, vias ...int) {
+	rf.t.Helper()
+	var entries []string
+	for i, via := range vias {
+		key := ""
+		if via != 0 {
+			key = fmt.Sprintf(", via: %d", via)
+		}
+		entries = append(entries, fmt.Sprintf(`{id: "e%d", exact: null, file_hash: "", thread: [{by: "reader", at: null, text: "fix"%s}]}`, i, key))
+	}
+	body := fmt.Sprintf(`{version: 2, file: "doc.md", trigger: %q, annotations: [%s]}`, trigger, strings.Join(entries, ", "))
+	if err := os.WriteFile(filepath.Join(rf.dir, sidecarName), []byte(body), 0o644); err != nil {
+		rf.t.Fatal(err)
+	}
+}
+
+// putVia saves body, which names via, and returns the answer.
+func (rf *routedFixture) putVia(body string) annotationsResponse {
+	rf.t.Helper()
+	rec := rf.annotations(http.MethodPut, body)
+	var resp annotationsResponse
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &resp) != nil {
+		rf.t.Fatalf("PUT %s: expected 200 and JSON, got %d %s", body, rec.Code, rec.Body)
+	}
+	return resp
+}
+
+// vias is the via of every message, entry by entry.
+func vias(entries []annotation) [][]int {
+	var out [][]int
+	for _, a := range entries {
+		var v []int
+		for _, m := range a.Thread {
+			v = append(v, m.Via)
+		}
+		out = append(out, v)
+	}
+	return out
+}
+
+// 013-AC8
+func TestViaOfANewReaderMessage(t *testing.T) {
+	t.Parallel()
+
+	newEntry := `{"via":%d,"annotations":[{"exact":null,"thread":[{"by":"reader","text":"fix"}]}]}`
+	for _, tc := range []struct {
+		name string
+		// A's root contains the file; B, when live, does, and has the page open or not.
+		inRoot, bLive, bListed bool
+		want                   int
+	}{
+		{"page open only in A", true, false, false, portA},
+		{"outside A, B live without the page", false, true, false, portB},
+		{"outside A, B has the page open", false, true, true, portB},
+		{"outside A, no instance contains it", false, false, false, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			rf := newRoutedFixture(t, "# Title\n")
+			if !tc.inRoot {
+				// Served through ../ of the start argument.
+				rf.g.root = filepath.Join(resolveDir(rf.dir), "sub")
+			}
+			if tc.bLive {
+				rf.peer(livePID(t), portB, filepath.Dir(rf.key), tc.bListed)
+			}
+			got := rf.putVia(fmt.Sprintf(newEntry, portC))
+			if v := vias(got.Annotations); !reflect.DeepEqual(v, [][]int{{tc.want}}) {
+				t.Fatalf("expected via %d, got %v", tc.want, v)
+			}
+			if tc.want == 0 && strings.Contains(rf.sidecar(), `"via"`) {
+				t.Fatalf("expected no via key written, got %s", rf.sidecar())
+			}
+		})
+	}
+}
+
+// 013-AC9, 013-AC10
+func TestViaChosenByTheReader(t *testing.T) {
+	t.Parallel()
+
+	rf := newRoutedFixture(t, "# Title\n")
+	pidB := livePID(t)
+	rf.peer(pidB, portB, filepath.Dir(rf.key), true)
+
+	// Naming B; a via set on the message itself is ignored.
+	got := rf.putVia(fmt.Sprintf(`{"via":%d,"annotations":[{"exact":null,"thread":[{"by":"reader","text":"one","via":%d}]}]}`, portB, portC))
+	if v := vias(got.Annotations); !reflect.DeepEqual(v, [][]int{{portB}}) {
+		t.Fatalf("expected via B, got %v", v)
+	}
+	if got.Self != portA || !reflect.DeepEqual(got.Targets, []int{portA, portB}) || !reflect.DeepEqual(got.Live, []int{portA, portB}) {
+		t.Fatalf("expected the answer to hold self, targets and live, got %+v", got.routing)
+	}
+	id := got.Annotations[0].ID
+
+	// An edit of that message through A keeps B; a new message naming a port not in targets
+	// goes to the first of them.
+	got = rf.putVia(fmt.Sprintf(`{"via":%d,"annotations":[{"id":%q,"thread":[{"by":"reader","text":"one, edited","via":%d}]},{"exact":null,"thread":[{"by":"reader","text":"two"}]}]}`, portC, id, portA))
+	if v := vias(got.Annotations); !reflect.DeepEqual(v, [][]int{{portB}, {portA}}) {
+		t.Fatalf("expected the edit to keep B and the new one on A, got %v", v)
+	}
+	if got.Annotations[0].Thread[0].Text != "one, edited" {
+		t.Fatalf("expected the edit saved, got %+v", got.Annotations[0])
+	}
+}
+
+// 013-AC10, 013-AC8: a gone via, or the port of a dead via taken again by an instance on
+// another tree, goes to the owner at the next save, whatever port the PUT names.
+func TestGoneViaIsRestamped(t *testing.T) {
+	t.Parallel()
+
+	rf := newRoutedFixtureOn(t, "# Title\n", portB)
+	rf.peer(livePID(t), portA, filepath.Dir(rf.key), true)
+	rf.peer(livePID(t), portC, filepath.Join(t.TempDir(), "elsewhere"), true)
+	rf.writeRouted(triggerAuto, 7000, portC, portB, 0)
+	got := rf.putVia(fmt.Sprintf(`{"via":%d,"trigger":"auto"}`, portB))
+	if v := vias(got.Annotations); !reflect.DeepEqual(v, [][]int{{portA}, {portA}, {portB}, {0}}) {
+		t.Fatalf("expected gone vias on A, B kept, absent left, got %v", v)
+	}
+	if !strings.Contains(rf.sidecar(), fmt.Sprintf(`"via": %d`, portA)) {
+		t.Fatalf("expected the re-stamp saved, got %s", rf.sidecar())
+	}
+}
+
+// readyVia sends Go naming via.
+func (rf *routedFixture) readyVia(via int) *httptest.ResponseRecorder {
+	rf.t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/__annotations/ready?path="+docPath, strings.NewReader(fmt.Sprintf(`{"via":%d}`, via)))
+	rec := httptest.NewRecorder()
+	rf.handler.ServeHTTP(rec, req)
+	return rec
+}
+
+// 013-AC11
+func TestGoNamesTheInstance(t *testing.T) {
+	t.Parallel()
+
+	rf := newRoutedFixture(t, "# Title\n")
+	rf.peer(livePID(t), portB, filepath.Dir(rf.key), true)
+	rf.writeRouted(triggerManual, portB)
+
+	rec := rf.readyVia(portB)
+	var resp readyResponse
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &resp) != nil || resp.Via != portB || resp.State != readySent || !reflect.DeepEqual(resp.Targets, []int{portA, portB}) {
+		t.Fatalf("expected the batch sent to B, got %d %s", rec.Code, rec.Body)
+	}
+	if got := rf.getAnnotations().Ready; got.Via != portB {
+		t.Fatalf("expected the GET to report via B, got %+v", got)
+	}
+	sent := rf.readyContent()
+
+	if rec := rf.readyVia(portA); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), fmt.Sprintf("batch pending for :%d", portB)) {
+		t.Fatalf("expected Go naming A refused with B's port, got %d %s", rec.Code, rec.Body)
+	}
+	if rec := rf.readyVia(portB); rec.Code != http.StatusOK || rf.readyContent() != sent {
+		t.Fatalf("expected Go naming B again to write nothing, got %d %q", rec.Code, rf.readyContent())
+	}
+
+	// An agent rewrite keeps via.
+	rf.writeReady(fmt.Sprintf(`{sent_at: "2026-11-04T10:00:00Z", pid: %d, claimed_at: "2026-11-04T10:01:00Z", via: %d}`, os.Getpid(), portB))
+	if got := rf.getAnnotations().Ready; got.Via != portB || got.State != readyWorking {
+		t.Fatalf("expected the claimed batch still B's, got %+v", got)
+	}
+
+	if rec := rf.ready(http.MethodDelete); rec.Code != http.StatusOK {
+		t.Fatal(rec.Body)
+	}
+	if rec := rf.readyVia(portA); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), fmt.Sprintf("nothing open for :%d", portA)) || rf.readyContent() != "" {
+		t.Fatalf("expected Go naming A, which owns no open entry, refused, got %d %s", rec.Code, rec.Body)
+	}
+
+	// A batch whose via is gone is A's, the lowest port: Go naming A rewrites its via.
+	rf.writeReady(`{sent_at: "2026-11-04T10:00:00Z", pid: null, via: 7000}`)
+	if rec := rf.readyVia(portA); rec.Code != http.StatusOK {
+		t.Fatalf("expected Go naming A to take the gone batch, got %d %s", rec.Code, rec.Body)
+	}
+	rf2, err := loadReady(filepath.Join(rf.dir, readyName))
+	if err != nil || rf2.Via != portA || rf2.SentAt == nil || *rf2.SentAt != "2026-11-04T10:00:00Z" || rf2.PID != nil {
+		t.Fatalf("expected via rewritten to A, the rest kept, got %+v %v", rf2, err)
 	}
 }

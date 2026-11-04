@@ -3,10 +3,7 @@
 package internal
 
 import (
-	"bytes"
 	"fmt"
-	"log"
-	"os"
 	"path/filepath"
 	"syscall"
 	"testing"
@@ -16,9 +13,7 @@ import (
 // An entry that is not a regular file is skipped: a FIFO would block every scan, a directory
 // of a dead PID cannot be removed and would log on each one. Not parallel: it captures the log.
 func TestScanRegistrySkipsNotARegularFile(t *testing.T) {
-	var logged bytes.Buffer
-	log.SetOutput(&logged)
-	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	logged := captureLog(t)
 
 	dir := t.TempDir()
 	live := livePID(t)

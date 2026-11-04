@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -67,30 +68,19 @@ func (p Pending) Run() (bool, error) {
 func (p Pending) owns() func(key string, via int) bool {
 	all := scanRegistry(p.Registry)
 	now := time.Now()
-	var live []instance
-	self := false
-	for _, in := range all {
-		if in.PID != p.PID {
-			if fresh(in, now, registryLive) {
-				live = append(live, in)
-			}
-			continue
-		}
-		self = true
-		switch {
-		case in.Port != p.Port:
-			_, _ = fmt.Fprintf(p.Err, "pid %d serves :%d, not :%d: nothing is its own\n", p.PID, in.Port, p.Port)
-			return func(string, int) bool { return false }
-		case !fresh(in, now, registryLive):
-			_, _ = fmt.Fprintf(p.Err, "instance :%d (pid %d) not seen since %s: nothing is its own\n", p.Port, p.PID, in.SeenAt)
-			return func(string, int) bool { return false }
-		}
-		live = append(live, in)
-	}
-	if !self {
+	i := slices.IndexFunc(all, func(in instance) bool { return in.PID == p.PID })
+	if i < 0 {
 		return func(string, int) bool { return true }
 	}
-	v := peers{live: live}
+	switch in := all[i]; {
+	case in.Port != p.Port:
+		_, _ = fmt.Fprintf(p.Err, "pid %d serves :%d, not :%d: nothing is its own\n", p.PID, in.Port, p.Port)
+		return func(string, int) bool { return false }
+	case !fresh(in, now, registryLive):
+		_, _ = fmt.Fprintf(p.Err, "instance :%d (pid %d) not seen since %s: nothing is its own\n", p.Port, p.PID, in.SeenAt)
+		return func(string, int) bool { return false }
+	}
+	v := peers{live: liveOf(all, now, registryLive)}
 	return func(key string, via int) bool { return v.owner(key, via) == p.Port }
 }
 

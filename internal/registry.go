@@ -150,6 +150,17 @@ func fresh(in instance, now time.Time, liveFor time.Duration) bool {
 	return err == nil && now.Sub(t) < liveFor
 }
 
+// liveOf keeps the instances of all that wrote their heartbeat within liveFor.
+func liveOf(all []instance, now time.Time, liveFor time.Duration) []instance {
+	var out []instance
+	for _, in := range all {
+		if fresh(in, now, liveFor) {
+			out = append(out, in)
+		}
+	}
+	return out
+}
+
 // peers is one read of the registry: the live instances, self included, by port. self is 0
 // when routing is off; live is then empty.
 type peers struct {
@@ -301,10 +312,9 @@ func (g *registry) write() error {
 
 // read returns the live instances: the others from their files, this one as it stands.
 func (g *registry) read() peers {
-	now := time.Now()
 	live := []instance{g.self()}
-	for _, in := range scanRegistry(g.dir) {
-		if in.PID != g.pid && fresh(in, now, g.liveFor) {
+	for _, in := range liveOf(scanRegistry(g.dir), time.Now(), g.liveFor) {
+		if in.PID != g.pid {
 			live = append(live, in)
 		}
 	}

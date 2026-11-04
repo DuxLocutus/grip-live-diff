@@ -671,30 +671,34 @@ func TestDirectoryReleasedAfterLastPage(t *testing.T) {
 	}
 }
 
-// A timer that fired while a page came back and left again, and waited on the lock, finds
-// another timer in its place and releases nothing.
-func TestReleaseIgnoresAStaleTimer(t *testing.T) {
+// A timer that fired while a user came back and left again, and waited on the lock, finds
+// another timer in its place and releases nothing; the current one releases.
+func TestRefCountIgnoresAStaleTimer(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
-	r := watchedReloader(t, dir)
-	r.unsubscribe(r.subscribe([]string{"/"}))
-	r.subMu.Lock()
-	sub := r.subs["/"]
-	stale := sub.timer
-	r.subMu.Unlock()
-	r.unsubscribe(r.subscribe([]string{"/"}))
-
-	r.release("/", sub, &stale)
-	if !isWatched(r, "/") {
-		t.Fatal("expected / still watched: the timer is stale")
+	var mu sync.Mutex
+	var c refCount
+	released := make(chan struct{}, 2)
+	release := func() func() {
+		released <- struct{}{}
+		return nil
 	}
-	r.subMu.Lock()
-	current := sub.timer
-	r.subMu.Unlock()
-	r.release("/", sub, &current)
-	if isWatched(r, "/") {
-		t.Fatal("expected / released by the current timer")
+	mu.Lock()
+	c.acquire()
+	c.drop(&mu, 0, release)
+	time.Sleep(50 * time.Millisecond) // fired, waiting on mu
+	c.acquire()
+	c.drop(&mu, 200*time.Millisecond, release)
+	mu.Unlock()
+	select {
+	case <-released:
+		t.Fatal("expected the stale timer to release nothing")
+	case <-time.After(100 * time.Millisecond):
+	}
+	select {
+	case <-released:
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected the current timer to release")
 	}
 }
 

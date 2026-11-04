@@ -870,3 +870,21 @@ func TestGoNamesTheInstance(t *testing.T) {
 		t.Fatalf("expected via rewritten to A, the rest kept, got %+v %v", rf2, err)
 	}
 }
+
+func TestRegistryStartTightensTheDirectory(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" {
+		t.Skip("no POSIX modes")
+	}
+	dir := filepath.Join(t.TempDir(), "instances")
+	if err := os.Mkdir(dir, 0o755); err != nil { //nolint:gosec // the mode of an earlier build
+		t.Fatal(err)
+	}
+	if err := newRegistry(dir, portA, "/nowhere", &bytes.Buffer{}).start(); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(dir); err != nil || info.Mode().Perm() != 0o700 {
+		t.Fatalf("expected 0700, got %v %v", info, err)
+	}
+}

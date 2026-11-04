@@ -301,6 +301,9 @@ func (g *registry) start() error {
 	if err := os.MkdirAll(g.dir, 0o700); err != nil {
 		return err
 	}
+	if err := os.Chmod(g.dir, 0o700); err != nil {
+		return err
+	}
 	scanRegistry(g.dir)
 	return g.write()
 }

@@ -3,9 +3,11 @@ package internal
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -228,6 +230,27 @@ func TestPendingClaim(t *testing.T) {
 	}
 }
 
+func TestFindSidecarsSkipsAnUnreadableDirectory(t *testing.T) {
+	t.Parallel()
+
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX permissions enforced on a non-root user")
+	}
+	dir := t.TempDir()
+	writeFile(t, dir, "ok/a.annotations.json5", "{}")
+	locked := filepath.Join(dir, "locked")
+	if err := os.Mkdir(locked, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o700) }) //nolint:gosec // let TempDir clean up
+	var errOut bytes.Buffer
+	got, err := findSidecars([]string{dir}, &errOut)
+	want := []string{filepath.Join(dir, "ok", "a.annotations.json5")}
+	if err != nil || !reflect.DeepEqual(got, want) || !strings.Contains(errOut.String(), "locked") {
+		t.Fatalf("expected %v and the directory on stderr, got %v %v %q", want, got, err, errOut.String())
+	}
+}
+
 func TestFindSidecars(t *testing.T) {
 	t.Parallel()
 
@@ -240,7 +263,7 @@ func TestFindSidecars(t *testing.T) {
 		filepath.Join(dir, "sub", "b.md"),
 		filepath.Join(dir, "sub", "b.annotations.ready"),
 		filepath.Join(dir, "missing.annotations.json5"),
-	})
+	}, io.Discard)
 	want := []string{
 		filepath.Join(dir, "a.annotations.json5"),
 		filepath.Join(dir, "sub", "b.annotations.json5"),

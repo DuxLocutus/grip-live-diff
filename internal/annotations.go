@@ -134,7 +134,7 @@ type sidecar struct {
 // tell a comment written against an older version.
 type annotationsResponse struct {
 	sidecar
-	routing
+	routingInfo
 	Hash  string     `json:"hash"`
 	Ready readyState `json:"ready"`
 }
@@ -369,21 +369,23 @@ func readSidecar(dir http.Dir, target string) (sidecar, error) {
 	return decodeSidecar(f, target)
 }
 
-// route is the registry read a save or a send is checked against: via is the port the reader
-// chose, owner applies the owner rule to the via of a message. The zero value is routing off.
-type route struct {
+// writeRoute is the registry read a save or a send is checked against: via is the port the
+// reader chose, owner applies the owner rule to the via of a message. The zero value is
+// routing off.
+type writeRoute struct {
 	via   int
 	owner func(via int) int
 }
 
-func (s *Server) route(dir http.Dir, target string, asked int) (route, routing) {
+// route reads the registry once for target: the check of a write, and what the page shows.
+func (s *Server) route(dir http.Dir, target string, asked int) (writeRoute, routingInfo) {
 	key := pageKey(dir, target)
 	p := s.peers()
-	rt := route{}
+	rt := writeRoute{}
 	if s.reg != nil {
-		rt = route{via: p.pick(key, asked), owner: func(via int) int { return p.owner(key, via) }}
+		rt = writeRoute{via: p.pick(key, asked), owner: func(via int) int { return p.owner(key, via) }}
 	}
-	return rt, p.routing(s.port, key)
+	return rt, p.info(s.port, key)
 }
 
 // restamp gives an open entry whose via is gone the port of its owner: its agent may already
@@ -404,7 +406,7 @@ func restamp(entries []annotation, owner func(int) int) {
 // disk under an exclusive lock, and sets trigger unless empty; nil incoming keeps the stored
 // list. The write is in place, not temp + rename: a rename would swap the inode under an
 // agent waiting on the lock.
-func writeSidecar(dir http.Dir, target string, source []byte, incoming *[]annotation, trigger string, rt route) (sidecar, error) {
+func writeSidecar(dir http.Dir, target string, source []byte, incoming *[]annotation, trigger string, rt writeRoute) (sidecar, error) {
 	p := sidecarPath(dir, target)
 	f, err := lockSidecar(p, os.O_RDWR|os.O_CREATE, true)
 	if err != nil {
@@ -616,8 +618,8 @@ func (s *Server) handleAnnotations(w http.ResponseWriter, r *http.Request, dir h
 	}
 
 	var sc sidecar
-	var rt route
-	var info routing
+	var rt writeRoute
+	var info routingInfo
 	switch r.Method {
 	case http.MethodGet:
 		_, info = s.route(dir, target, 0)
@@ -652,7 +654,7 @@ func (s *Server) handleAnnotations(w http.ResponseWriter, r *http.Request, dir h
 
 	setNoCacheHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
-	resp := annotationsResponse{sidecar: sc, routing: info, Hash: fileHash(content), Ready: readReady(readyPath(dir, target))}
+	resp := annotationsResponse{sidecar: sc, routingInfo: info, Hash: fileHash(content), Ready: readReady(readyPath(dir, target))}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Println(err)
 	}

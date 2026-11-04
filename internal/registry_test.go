@@ -482,7 +482,7 @@ func TestReadOnlyRegistry(t *testing.T) {
 	err = json.NewDecoder(resp.Body).Decode(&got)
 	resp.Body.Close() //nolint:errcheck
 	if err != nil || got.Self != inst.port || len(got.Targets) != 0 || len(got.Live) != 0 {
-		t.Fatalf("expected self and no target, got %+v %v", got.routing, err)
+		t.Fatalf("expected self and no target, got %+v %v", got.routingInfo, err)
 	}
 	req, _ := http.NewRequest(http.MethodPut, base+"/__annotations?path=/doc.md", strings.NewReader(fmt.Sprintf(`{"via":%d,"annotations":[{"exact":null,"thread":[{"by":"reader","text":"fix"}]}]}`, inst.port)))
 	resp, err = http.DefaultClient.Do(req)
@@ -613,7 +613,7 @@ func TestSharedPage(t *testing.T) {
 	rf := newRoutedFixture(t, "# Title\n")
 	// Listed or not (--no-reload), A is the first of its own targets.
 	if got := rf.getAnnotations(); got.Self != portA || !reflect.DeepEqual(got.Targets, []int{portA}) {
-		t.Fatalf("expected A alone, got %+v", got.routing)
+		t.Fatalf("expected A alone, got %+v", got.routingInfo)
 	}
 	pidB, pidC := livePID(t), livePID(t)
 	rf.peer(pidB, portB, filepath.Dir(rf.key), true)
@@ -621,7 +621,7 @@ func TestSharedPage(t *testing.T) {
 	rf.peer(pidC, portC, filepath.Join(filepath.Dir(rf.key), "sub"), true)
 	got := rf.getAnnotations()
 	if got.Self != portA || !reflect.DeepEqual(got.Targets, []int{portA, portB}) || !reflect.DeepEqual(got.Live, []int{portA, portB, portC}) {
-		t.Fatalf("expected targets [A B] and C live, got %+v", got.routing)
+		t.Fatalf("expected targets [A B] and C live, got %+v", got.routingInfo)
 	}
 	rec := rf.ready(http.MethodDelete)
 	var ready readyResponse
@@ -780,7 +780,7 @@ func TestViaChosenByTheReader(t *testing.T) {
 		t.Fatalf("expected via B, got %v", v)
 	}
 	if got.Self != portA || !reflect.DeepEqual(got.Targets, []int{portA, portB}) || !reflect.DeepEqual(got.Live, []int{portA, portB}) {
-		t.Fatalf("expected the answer to hold self, targets and live, got %+v", got.routing)
+		t.Fatalf("expected the answer to hold self, targets and live, got %+v", got.routingInfo)
 	}
 	id := got.Annotations[0].ID
 

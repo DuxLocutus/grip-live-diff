@@ -57,7 +57,7 @@ type readyState struct {
 // readyResponse is the ready state with the registry read, as the annotations GET has it.
 type readyResponse struct {
 	readyState
-	routing
+	routingInfo
 }
 
 // readyPath is the ready file beside target's sidecar, confined like it.
@@ -138,7 +138,7 @@ func isOpen(a annotation) bool {
 // sendReady writes the ready file of target for the instance rt.via, under the sidecar's lock,
 // the one the agent claims under. A batch already sent or worked on is left as is when its
 // owner is rt.via, its gone via rewritten; refused when it is another instance's.
-func sendReady(dir http.Dir, target string, rt route) (readyState, error) {
+func sendReady(dir http.Dir, target string, rt writeRoute) (readyState, error) {
 	// O_RDWR: on NFS, flock is emulated by fcntl, whose exclusive lock needs a writable fd.
 	f, err := lockSidecar(sidecarPath(dir, target), os.O_RDWR, true)
 	if errors.Is(err, os.ErrNotExist) {
@@ -272,7 +272,7 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request, dir http.Di
 
 	setNoCacheHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
-	resp := readyResponse{readyState: st, routing: info}
+	resp := readyResponse{readyState: st, routingInfo: info}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Println(err)
 	}

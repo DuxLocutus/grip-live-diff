@@ -228,15 +228,15 @@ func (p peers) pick(key string, asked int) int {
 	return p.owner(key, 0)
 }
 
-// routing is what the page needs of a registry read for one file.
-type routing struct {
+// routingInfo is what the page needs of a registry read for one file.
+type routingInfo struct {
 	Self    int   `json:"self"`
 	Targets []int `json:"targets"`
 	Live    []int `json:"live"`
 }
 
-func (p peers) routing(self int, key string) routing {
-	return routing{Self: self, Targets: p.targets(key), Live: p.ports()}
+func (p peers) info(self int, key string) routingInfo {
+	return routingInfo{Self: self, Targets: p.targets(key), Live: p.ports()}
 }
 
 // registry keeps the file of this instance and reads the others.

@@ -871,6 +871,19 @@ func TestGoNamesTheInstance(t *testing.T) {
 	}
 }
 
+// 013-AC8, 013-AC11: a file served through ../ of A, and no instance whose root contains it,
+// has no owner: Go is refused and writes no ready file nobody would take.
+func TestGoWithNoOwnerIsRefused(t *testing.T) {
+	t.Parallel()
+
+	rf := newRoutedFixture(t, "# Title\n")
+	rf.g.root = filepath.Join(resolveDir(rf.dir), "sub")
+	rf.writeRouted(triggerManual, 0)
+	if rec := rf.readyVia(portA); rec.Code != http.StatusConflict || rf.readyContent() != "" {
+		t.Fatalf("expected Go refused and no ready file, got %d %s %q", rec.Code, rec.Body, rf.readyContent())
+	}
+}
+
 func TestRegistryStartTightensTheDirectory(t *testing.T) {
 	t.Parallel()
 

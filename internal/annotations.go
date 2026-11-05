@@ -383,9 +383,10 @@ type writeRoute struct {
 	owner func(via int) int
 }
 
-// owns tells whether the instance via owns a message routed to msgVia; routing off owns all.
+// owns tells whether the instance via owns a message routed to msgVia; routing off owns all,
+// no instance (via 0) owns nothing.
 func (rt writeRoute) owns(msgVia int) bool {
-	return rt.owner == nil || rt.owner(msgVia) == rt.via
+	return rt.owner == nil || (rt.via != 0 && rt.owner(msgVia) == rt.via)
 }
 
 // route reads the registry once for target: the check of a write, and what the page shows.

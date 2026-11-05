@@ -108,6 +108,10 @@ dump_logs() {
   cat "$tmp/server.log" >&2
   echo "--- chrome log" >&2
   cat "$tmp/chrome.log" >&2
+  if [[ -f "$tmp/b.log" ]]; then
+    echo "--- instance B log" >&2
+    cat "$tmp/b.log" >&2
+  fi
 }
 
 (cd "$ROOT" && go build -o "$tmp/gld" .) || die "go build failed"

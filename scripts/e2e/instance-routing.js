@@ -31,23 +31,31 @@ function registryFiles(pid) {
     .filter((f) => f.endsWith(`instances${path.sep}${pid}.json`));
 }
 
-// startB runs B on the docs directory, with the HOME of A, and resolves on its start line.
+// startB runs B on the docs directory, with the HOME of A, its output in <work>/b.log for
+// run.sh to show on a failure, and resolves on its start line.
 function startB() {
-  const b = spawn(path.join(work, "gld"), ["-b=false", "-H", "127.0.0.1", "-p", portB, docs], { env: Object.assign({}, process.env, { HOME: path.join(work, "home") }) });
+  const log = path.join(work, "b.log");
+  const fd = fs.openSync(log, "w");
+  const b = spawn(path.join(work, "gld"), ["-b=false", "-H", "127.0.0.1", "-p", portB, docs], { env: Object.assign({}, process.env, { HOME: path.join(work, "home") }), stdio: ["ignore", fd, fd] });
+  fs.closeSync(fd);
   fs.writeFileSync(path.join(work, "b.pid"), String(b.pid));
-  let out = "";
   return new Promise((res, rej) => {
-    const t = setTimeout(() => rej(new Error("B printed no start line: " + out)), 10000);
-    b.stdout.on("data", (d) => {
-      out += d;
+    const t0 = Date.now();
+    const poll = setInterval(() => {
+      const out = fs.readFileSync(log, "utf8");
       const m = /\(pid (\d+)\)/.exec(out);
       if (m) {
-        clearTimeout(t);
+        clearInterval(poll);
         res({ proc: b, pid: Number(m[1]) });
+      } else if (Date.now() - t0 > 10000) {
+        clearInterval(poll);
+        rej(new Error("B printed no start line: " + out));
       }
+    }, 100);
+    b.on("exit", (code) => {
+      clearInterval(poll);
+      rej(new Error("B exited " + code + ": " + fs.readFileSync(log, "utf8")));
     });
-    b.stderr.on("data", (d) => (out += d));
-    b.on("exit", (code) => rej(new Error("B exited " + code + ": " + out)));
   });
 }
 

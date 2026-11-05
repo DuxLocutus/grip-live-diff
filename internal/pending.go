@@ -11,8 +11,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/titanous/json5"
 )
 
 // Pending is one run of `grip-live-diff pending`: the open entries of Paths whose owner is the
@@ -143,16 +141,13 @@ func pendingLines(p string, owns func(key string, via int) bool, claim int64) ([
 	}
 	// The key is the one of the page: the file name as served, which the name of the sidecar
 	// has lost the extension of.
-	var head struct {
-		File string `json:"file"`
-	}
 	name := strings.TrimSuffix(filepath.Base(p), sidecarSuffix) + ".md"
-	if json5.Unmarshal(data, &head) == nil && head.File != "" {
-		name = filepath.Base(head.File)
-	}
-	sc, err := parseSidecar(data, "/"+name, p)
+	sc, stored, err := parseSidecar(data, "/"+name, p)
 	if err != nil {
 		return nil, err
+	}
+	if stored != "" {
+		name = filepath.Base(stored)
 	}
 	key := pageKey(http.Dir(filepath.Dir(p)), name)
 

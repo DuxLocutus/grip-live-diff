@@ -295,21 +295,25 @@ func decodeSidecar(f *os.File, target string) (sidecar, error) {
 	if err != nil {
 		return emptySidecar(target), err
 	}
-	return parseSidecar(data, target, f.Name())
+	sc, _, err := parseSidecar(data, target, f.Name())
+	return sc, err
 }
 
-// parseSidecar decodes the sidecar of target read from the file name.
-func parseSidecar(data []byte, target, name string) (sidecar, error) {
+// parseSidecar decodes the sidecar of target read from the file name, and returns the file
+// name it stored, "" when none.
+func parseSidecar(data []byte, target, name string) (sidecar, string, error) {
 	sc := emptySidecar(target)
 	// A freshly created file is empty: that is the "no annotations yet" sidecar.
 	if len(strings.TrimSpace(string(data))) == 0 {
-		return sc, nil
+		return sc, "", nil
 	}
+	sc.File = ""
 	// JSON5, not JSON: an agent round-tripping through a JSON5 library writes bare keys
 	// and single quotes, and the header above the document is a comment.
 	if err := json5.Unmarshal(data, &sc); err != nil {
-		return sc, fmt.Errorf("decode %s: %w", name, err)
+		return sc, "", fmt.Errorf("decode %s: %w", name, err)
 	}
+	stored := sc.File
 	sc.Version, sc.File = sidecarVersion, path.Base(target)
 	if sc.Trigger != triggerManual {
 		sc.Trigger = triggerAuto
@@ -320,7 +324,7 @@ func parseSidecar(data []byte, target, name string) (sidecar, error) {
 	for i, a := range sc.Annotations {
 		sc.Annotations[i] = upgrade(a)
 	}
-	return sc, nil
+	return sc, stored, nil
 }
 
 // A sidecar replaced this often while we wait for its lock is not one an agent edits.

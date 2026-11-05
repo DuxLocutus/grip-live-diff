@@ -133,7 +133,7 @@ func writeReady(p string, rf readyFile) error {
 
 // lastVia is where the last message of an open entry is routed.
 func lastVia(a annotation) int {
-	return a.Thread[len(a.Thread)-1].Via
+	return lastMessage(&a).Via
 }
 
 // isRegular is checked before any open: opening a FIFO blocks until a writer comes, and a
@@ -146,7 +146,8 @@ func isRegular(p string) (bool, error) {
 // isOpen tells a request from a handled entry: the reader spoke last and the agent did not
 // close it.
 func isOpen(a annotation) bool {
-	return a.Status != "done" && len(a.Thread) > 0 && a.Thread[len(a.Thread)-1].By == byReader
+	last := lastMessage(&a)
+	return a.Status != "done" && last != nil && last.By == byReader
 }
 
 // sendReady writes the ready file of target for the instance rt.via, under the sidecar's lock,

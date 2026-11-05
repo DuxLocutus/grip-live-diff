@@ -409,6 +409,14 @@ func (s *Server) route(dir http.Dir, target string, asked int) (writeRoute, rout
 	return writeRoute{via: p.pick(key, asked), key: key, peers: p}, p.info(s.port, key)
 }
 
+// lastMessage is the last message of the thread of a, in place; nil when it has none.
+func lastMessage(a *annotation) *message {
+	if len(a.Thread) == 0 {
+		return nil
+	}
+	return &a.Thread[len(a.Thread)-1]
+}
+
 // restamp gives an open entry whose via is gone the port of its owner: its agent may already
 // handle it, whatever port the reader chose since.
 func restamp(entries []annotation, owner func(int) int) {
@@ -416,7 +424,7 @@ func restamp(entries []annotation, owner func(int) int) {
 		if !isOpen(a) {
 			continue
 		}
-		last := &a.Thread[len(a.Thread)-1]
+		last := lastMessage(&a)
 		if o := owner(last.Via); last.Via != 0 && o != 0 && o != last.Via {
 			last.Via = o
 		}

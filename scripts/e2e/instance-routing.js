@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawn } = require("child_process");
+const { check, connect, consoleErrors, ev, run, send, sleep, waitFor } = require("./cdp");
 
 const [portA, portB, cdpPort, work] = process.argv.slice(2);
 if (!work) {
@@ -15,51 +16,6 @@ const pageA = `http://127.0.0.1:${portA}/route.md`;
 const pageB = `http://127.0.0.1:${portB}/docs/route.md`;
 const cdp = `http://127.0.0.1:${cdpPort}`;
 
-let ws, seq = 0;
-const waiting = new Map();
-function send(method, params = {}) {
-  if (ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error("CDP socket closed"));
-  const id = ++seq;
-  ws.send(JSON.stringify({ id, method, params }));
-  return new Promise((res, rej) => {
-    const t = setTimeout(() => {
-      waiting.delete(id);
-      rej(new Error("CDP " + method + " got no reply within 10 s"));
-    }, 10000);
-    waiting.set(id, { res: (v) => (clearTimeout(t), res(v)), rej: (e) => (clearTimeout(t), rej(e)) });
-  });
-}
-async function ev(expr) {
-  const r = await send("Runtime.evaluate", { expression: expr, awaitPromise: true, returnByValue: true });
-  if (r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description || r.exceptionDetails.text);
-  return r.result.value;
-}
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-async function waitFor(expr, ms = 4000) {
-  const t0 = Date.now();
-  let lastErr;
-  for (;;) {
-    try {
-      if (await ev(expr)) return Date.now() - t0;
-    } catch (e) {
-      lastErr = e;
-    }
-    if (Date.now() - t0 > ms) throw new Error("timeout: " + expr + (lastErr ? " (last error: " + lastErr.message + ")" : ""));
-    await sleep(200);
-  }
-}
-let failures = 0;
-const consoleErrors = [];
-let completed = false;
-process.on("beforeExit", () => {
-  if (completed) return;
-  console.error("ERROR run ended before completion");
-  process.exit(3);
-});
-function check(label, ok, extra) {
-  if (!ok) failures++;
-  console.log((ok ? "PASS " : "FAIL ") + label + (extra !== undefined ? "  " + JSON.stringify(extra) : ""));
-}
 const sidecarJSON = () => JSON.parse(fs.readFileSync(sidecar, "utf8").replace(/^\/\/.*$/gm, ""));
 const banner = () =>
   ev(`(() => { const b = document.querySelector(".annotations-banner"), s = b && b.querySelector("select");
@@ -95,27 +51,8 @@ function startB() {
   });
 }
 
-(async () => {
-  const list = await (await fetch(`${cdp}/json/list`)).json();
-  ws = new WebSocket(list.find((t) => t.type === "page").webSocketDebuggerUrl);
-  ws.onmessage = (m) => {
-    const d = JSON.parse(m.data);
-    if (d.method === "Runtime.consoleAPICalled" && d.params.type === "error") consoleErrors.push("console: " + d.params.args.map((x) => x.description || x.value).join(" ").slice(0, 200));
-    if (d.method === "Runtime.exceptionThrown") consoleErrors.push("exception: " + (d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text).slice(0, 200));
-    if (d.id && waiting.has(d.id)) {
-      const w = waiting.get(d.id);
-      waiting.delete(d.id);
-      if (d.error) w.rej(new Error("CDP " + d.error.message));
-      else w.res(d.result);
-    }
-  };
-  ws.onclose = () => {
-    for (const w of waiting.values()) w.rej(new Error("CDP socket closed"));
-    waiting.clear();
-  };
-  await new Promise((r) => (ws.onopen = r));
-  await send("Page.enable");
-  await send("Runtime.enable");
+run(async () => {
+  await connect(cdpPort);
   await send("Page.navigate", { url: pageA });
   await waitFor(`document.readyState === "complete" && !!document.querySelector(".annotations-banner")`);
   // Runtime.enable replays what the page logged before: the 010 run's forced error.
@@ -162,11 +99,4 @@ function startB() {
   check("message shows (gone)", (await labels())[0].endsWith("→ :" + portB + " (gone)"), await labels());
 
   check("no page exceptions / console errors", consoleErrors.length === 0, consoleErrors);
-  console.log(failures ? failures + " FAILURE(S)" : "ALL PASS");
-  completed = true;
-  ws.close();
-  process.exit(failures ? 1 : 0);
-})().catch((e) => {
-  console.error("ERROR", e);
-  process.exit(2);
 });

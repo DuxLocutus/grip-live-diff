@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"regexp"
 	"time"
 
@@ -126,7 +125,7 @@ func writeReady(p string, rf readyFile) error {
 	if err != nil {
 		return err
 	}
-	if err := replaceFile(p, "."+filepath.Base(p)+"-*", 0o644, append(data, '\n')); err != nil {
+	if err := replaceFile(p, 0o644, append(data, '\n')); err != nil {
 		return fmt.Errorf("write %s: %w", p, err)
 	}
 	return nil

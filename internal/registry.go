@@ -311,7 +311,7 @@ func (g *registry) write(me instance) error {
 	if err != nil {
 		return err
 	}
-	return replaceFile(g.path(), "."+filepath.Base(g.path())+"-*", 0o600, append(data, '\n'))
+	return replaceFile(g.path(), 0o600, append(data, '\n'))
 }
 
 // read returns the live instances: the others from their files, this one as it stands.

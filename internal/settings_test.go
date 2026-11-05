@@ -259,7 +259,7 @@ func TestSaveSettingsErrors(t *testing.T) {
 			if err := saveSettings(tt.setup(t, dir), loadSettings("")); err == nil {
 				t.Fatal("want an error")
 			}
-			if left, _ := filepath.Glob(filepath.Join(dir, ".settings-*.json")); len(left) != 0 {
+			if left, _ := filepath.Glob(filepath.Join(dir, ".settings.json-*")); len(left) != 0 {
 				t.Errorf("temp files left: %v", left)
 			}
 		})

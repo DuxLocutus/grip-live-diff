@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -566,11 +567,7 @@ func newRoutedFixtureOn(t *testing.T, content string, port int) *routedFixture {
 	rf.g.pages = func() map[string]string {
 		rf.mu.Lock()
 		defer rf.mu.Unlock()
-		out := map[string]string{}
-		for k, v := range rf.open {
-			out[k] = v
-		}
-		return out
+		return maps.Clone(rf.open)
 	}
 	rf.g.notify = func(page string) {
 		rf.mu.Lock()

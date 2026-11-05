@@ -17,6 +17,7 @@ const pageA = `http://127.0.0.1:${portA}/route.md`;
 const pageB = `http://127.0.0.1:${portB}/docs/route.md`;
 const cdp = `http://127.0.0.1:${cdpPort}`;
 
+const readyFile = () => (fs.existsSync(ready) ? JSON.parse(fs.readFileSync(ready, "utf8")) : {});
 const sidecarJSON = () => JSON.parse(fs.readFileSync(sidecar, "utf8").replace(/^\/\/.*$/gm, ""));
 const banner = () =>
   ev(`(() => { const b = document.querySelector(".annotations-banner"), s = b && b.querySelector("select");
@@ -120,6 +121,11 @@ run(async () => {
   check("message stamped via B on disk", msg.via === Number(portB), msg);
   await waitFor(`document.querySelectorAll(".annotations-list .annot-msg-reader small").length === 1`);
   check("message shows → :B", (await labels())[0].endsWith("→ :" + portB), await labels());
+
+  // Go, with B chosen.
+  await ev(`document.getElementById("annotation-go").click()`);
+  await waitFor(`document.getElementById("annotation-go").textContent === "Sent → :${portB}"`).catch(() => {});
+  check("Go sends the batch to B, shows Sent → :B", readyFile().via === Number(portB) && (await ev(`document.getElementById("annotation-go").textContent`)) === "Sent → :" + portB, readyFile());
 
   await send("Page.reload");
   await sleep(500);

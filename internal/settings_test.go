@@ -214,6 +214,9 @@ func TestSettingsMenu(t *testing.T) {
 }
 
 func TestDefaultSettingsPath(t *testing.T) {
+	if runtime.GOOS == "darwin" || runtime.GOOS == "windows" {
+		t.Skip("os.UserConfigDir ignores XDG_CONFIG_HOME here")
+	}
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	if got, want := DefaultSettingsPath(), filepath.Join(dir, "grip-live-diff", "settings.json"); got != want {

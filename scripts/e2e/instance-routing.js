@@ -128,9 +128,9 @@ run(async () => {
   check("Go sends the batch to B, shows Sent → :B", readyFile().via === Number(portB) && (await ev(`document.getElementById("annotation-go").textContent`)) === "Sent → :" + portB, readyFile());
 
   await send("Page.reload");
-  await sleep(500);
-  await waitFor(`document.readyState === "complete" && !document.querySelector(".annotations-banner").hidden`, 10000);
-  check("choice survives a reload", (await banner()).via === portB, await banner());
+  await waitFor(`!window.__marker && document.readyState === "complete" && !document.querySelector(".annotations-banner").hidden`, 10000);
+  const reloaded = await banner();
+  check("choice survives a reload", reloaded.marker === null && reloaded.via === portB, reloaded);
 
   // B stops, its tab still open: A learns it from the registry, not from a refetch on focus.
   const visibility = await ev(`document.visibilityState`);

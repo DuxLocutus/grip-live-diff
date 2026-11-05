@@ -75,8 +75,15 @@ function startB() {
 
 run(async () => {
   await connect(cdpPort);
-  // Registered before annotate.js: swallows the websocket's sidecar event while __blockAnn.
+  // Registered before annotate.js: swallows the websocket's sidecar event while __blockAnn;
+  // keeps the bodies of the annotations PUTs.
   await send("Page.addScriptToEvaluateOnNewDocument", { source: `
+    window.__puts = [];
+    const f = window.fetch;
+    window.fetch = function (u, o) {
+      if (String(u).startsWith("/__annotations?") && o && o.method === "PUT") window.__puts.push(o.body);
+      return f.apply(this, arguments);
+    };
     window.__blockAnn = false;
     window.addEventListener("gld:annotations", (e) => { if (window.__blockAnn) e.stopImmediatePropagation(); }, true);` });
   await send("Page.navigate", { url: pageA });
@@ -151,6 +158,15 @@ run(async () => {
   await ev(`document.getElementById("annotation-go").click()`);
   await waitFor(`document.getElementById("annotation-go").textContent === "Sent → :${portA}"`).catch(() => {});
   check("Go rewrites the via of the batch to A", readyFile().via === Number(portA), readyFile());
+
+  // B stored as the choice, no longer a target: the next message names A.
+  await ev(`sessionStorage.setItem("grip-live-diff-via:/route.md", "${portB}"); window.__puts = []`);
+  await ev(`document.getElementById("annotation-document").click()`);
+  await ev(`document.querySelector(".annot-box textarea").value = "for A"`);
+  await ev(`document.querySelector(".annot-save").click()`);
+  await waitFor(`!document.querySelector(".annot-box").matches(":popover-open")`);
+  const asked = await ev(`window.__puts.map((b) => JSON.parse(b).via)`);
+  check("stored B, gone from targets: the PUT names A", asked.length === 1 && asked[0] === Number(portA), asked);
 
   check("no page exceptions / console errors", consoleErrors.length === 0, consoleErrors);
 });

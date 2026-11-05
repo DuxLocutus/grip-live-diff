@@ -231,6 +231,51 @@ func TestPendingClaim(t *testing.T) {
 	if _, err := two.Run(); err == nil {
 		t.Fatal("expected --claim on two sidecars refused")
 	}
+
+	// The trigger is checked again under the lock: in auto, nothing is claimed.
+	pf.write(triggerAuto)
+	pf.ready(fmt.Sprintf(`{sent_at: "2026-11-04T10:00:00Z", pid: null, via: %d}`, portA))
+	before, _ = os.ReadFile(readyFile) //nolint:gosec // idem
+	auto, autoOut, _ := pf.pending(portA, pf.pidA, agent, pf.sidecar)
+	found, err = auto.Run()
+	after, _ = os.ReadFile(readyFile) //nolint:gosec // idem
+	if err != nil || found || autoOut.Len() != 0 || !bytes.Equal(before, after) {
+		t.Fatalf("expected the claim refused and nothing written in auto, got %v %v %q %q", found, err, autoOut.String(), after)
+	}
+}
+
+// 013-AC12: --claim takes the exclusive lock of the sidecar, so it waits for a reader.
+func TestPendingClaimWaitsForTheLock(t *testing.T) {
+	t.Parallel()
+
+	pf := newPendingFixture(t)
+	pf.write(triggerManual)
+	pf.ready(fmt.Sprintf(`{sent_at: "2026-11-04T10:00:00Z", pid: null, via: %d}`, portA))
+	agent := livePID(t)
+	held, err := lockSidecar(pf.sidecar, os.O_RDONLY, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd, _, _ := pf.pending(portA, pf.pidA, agent, pf.sidecar)
+	done := make(chan bool, 1)
+	go func() {
+		found, _ := cmd.Run()
+		done <- found
+	}()
+	select {
+	case <-done:
+		releaseSidecar(held)
+		t.Fatal("expected the claim to wait while the sidecar is locked")
+	case <-time.After(200 * time.Millisecond):
+	}
+	releaseSidecar(held)
+	if found := <-done; !found {
+		t.Fatal("expected the claim to succeed once the lock is released")
+	}
+	rf, err := loadReady(filepath.Join(pf.dir, readyName))
+	if err != nil || rf.PID == nil || *rf.PID != agent {
+		t.Fatalf("expected the pid written, got %+v %v", rf, err)
+	}
 }
 
 func TestFindSidecarsSkipsAnUnreadableDirectory(t *testing.T) {

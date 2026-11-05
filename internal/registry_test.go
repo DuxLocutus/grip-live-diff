@@ -96,7 +96,7 @@ func TestPeers(t *testing.T) {
 		live           []instance
 		via, asked     int
 		owner, pick    int
-		targets, live2 []int
+		targets, ports []int
 	}{
 		{"alone", portA, []instance{a}, 0, 0, portA, portA, []int{portA}, []int{portA}},
 		{"shared, ask B", portA, []instance{a, b}, portB, portB, portB, portB, []int{portA, portB}, []int{portA, portB}},
@@ -121,8 +121,8 @@ func TestPeers(t *testing.T) {
 			if got := p.pick(key, tc.asked); got != tc.pick {
 				t.Errorf("pick(%d): expected %d, got %d", tc.asked, tc.pick, got)
 			}
-			if got := p.ports(); !reflect.DeepEqual(got, tc.live2) {
-				t.Errorf("ports: expected %v, got %v", tc.live2, got)
+			if got := p.ports(); !reflect.DeepEqual(got, tc.ports) {
+				t.Errorf("ports: expected %v, got %v", tc.ports, got)
 			}
 		})
 	}

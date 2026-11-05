@@ -47,23 +47,25 @@ func (pf *pendingFixture) write(trigger string) {
 		fmt.Sprintf(`{id: "closed", exact: null, file_hash: "", status: "done", thread: [{by: "reader", at: null, text: "fix", via: %d}]}`, portA),
 	}
 	body := fmt.Sprintf("// header\n{version: 2, file: \"doc.md\", trigger: %q, annotations: [%s]}", trigger, strings.Join(entries, ",\n"))
-	if err := os.WriteFile(pf.sidecar, []byte(body), 0o644); err != nil {
-		pf.t.Fatal(err)
-	}
+	writeFile(pf.t, pf.dir, filepath.Base(pf.sidecar), body)
 }
 
 func (pf *pendingFixture) ready(content string) {
 	pf.t.Helper()
-	if err := os.WriteFile(filepath.Join(pf.dir, readyName), []byte(content), 0o644); err != nil {
-		pf.t.Fatal(err)
-	}
+	writeFile(pf.t, pf.dir, readyName, content)
+}
+
+// pending is the command for port and pid on paths, with buffers for its two outputs.
+func (pf *pendingFixture) pending(port int, pid, claim int64, paths ...string) (Pending, *bytes.Buffer, *bytes.Buffer) {
+	var out, errOut bytes.Buffer
+	return Pending{Port: port, PID: pid, Claim: claim, Registry: pf.reg, Paths: paths, Out: &out, Err: &errOut}, &out, &errOut
 }
 
 // run calls pending for port and pid on the tree, and returns the ids it listed.
 func (pf *pendingFixture) run(port int, pid, claim int64) ([]string, bool, string) {
 	pf.t.Helper()
-	var out, errOut bytes.Buffer
-	found, err := Pending{Port: port, PID: pid, Claim: claim, Registry: pf.reg, Paths: []string{pf.dir}, Out: &out, Err: &errOut}.Run()
+	cmd, out, errOut := pf.pending(port, pid, claim, pf.dir)
+	found, err := cmd.Run()
 	if err != nil {
 		pf.t.Fatal(err)
 	}
@@ -92,7 +94,7 @@ func TestPending(t *testing.T) {
 	pf.write(triggerAuto)
 	dead := int64(exitedPID(t))
 	writeInstance(t, pf.reg, instance{PID: dead, Port: portC, Root: pf.dir})
-	asleep := livePID(t)
+	noFile := livePID(t)
 
 	for _, tc := range []struct {
 		name string
@@ -104,7 +106,7 @@ func TestPending(t *testing.T) {
 		{"B: its own only", portB, pf.pidB, []string{"toB"}},
 		{"a dead PID", portC, dead, nil},
 		{"a port that is not the PID's", portB, pf.pidA, nil},
-		{"routing off: no file, live PID", portC, asleep, []string{"toA", "toB", "gone", "unrouted"}},
+		{"routing off: no file, live PID", portC, noFile, []string{"toA", "toB", "gone", "unrouted"}},
 	} {
 		ids, _, _ := pf.run(tc.port, tc.pid, 0)
 		if !reflect.DeepEqual(ids, tc.want) {
@@ -153,8 +155,8 @@ func TestPendingResolvesThePath(t *testing.T) {
 	}
 	t.Chdir(filepath.Dir(pf.dir))
 	for _, path := range []string{link, filepath.Base(pf.dir)} {
-		var out, errOut bytes.Buffer
-		found, err := Pending{Port: portB, PID: pf.pidB, Registry: pf.reg, Paths: []string{path}, Out: &out, Err: &errOut}.Run()
+		cmd, out, errOut := pf.pending(portB, pf.pidB, 0, path)
+		found, err := cmd.Run()
 		if err != nil || !found || !strings.HasSuffix(out.String(), "\ttoB\n") {
 			t.Errorf("%s: expected B's entry, got %v %v %q %q", path, found, err, out.String(), errOut.String())
 		}
@@ -200,8 +202,8 @@ func TestPendingClaim(t *testing.T) {
 	// Replaced by a batch of B between pending and the claim.
 	pf.ready(fmt.Sprintf(`{sent_at: "2026-11-04T10:00:00Z", pid: null, via: %d}`, portB))
 	before, _ := os.ReadFile(readyFile) //nolint:gosec // the test's own file
-	var out, errOut bytes.Buffer
-	found, err := Pending{Port: portA, PID: pf.pidA, Claim: agent, Registry: pf.reg, Paths: []string{pf.sidecar}, Out: &out, Err: &errOut}.Run()
+	cmd, out, _ := pf.pending(portA, pf.pidA, agent, pf.sidecar)
+	found, err := cmd.Run()
 	after, _ := os.ReadFile(readyFile) //nolint:gosec // idem
 	if err != nil || found || out.Len() != 0 || !bytes.Equal(before, after) {
 		t.Fatalf("expected the claim of B's batch refused and nothing written, got %v %v %q %q", found, err, out.String(), after)
@@ -209,7 +211,7 @@ func TestPendingClaim(t *testing.T) {
 
 	pf.ready(fmt.Sprintf(`{sent_at: "2026-11-04T10:00:00Z", pid: null, via: %d}`, portA))
 	out.Reset()
-	found, err = Pending{Port: portA, PID: pf.pidA, Claim: agent, Registry: pf.reg, Paths: []string{pf.sidecar}, Out: &out, Err: &errOut}.Run()
+	found, err = cmd.Run()
 	if err != nil || !found {
 		t.Fatalf("expected the claim of A's batch to succeed, got %v %v", found, err)
 	}
@@ -222,10 +224,11 @@ func TestPendingClaim(t *testing.T) {
 	}
 
 	// Claimed already: a second claim fails.
-	if found, _ := (Pending{Port: portA, PID: pf.pidA, Claim: agent, Registry: pf.reg, Paths: []string{pf.sidecar}, Out: &out, Err: &errOut}).Run(); found {
+	if found, _ := cmd.Run(); found {
 		t.Fatal("expected a second claim refused")
 	}
-	if _, err := (Pending{Port: portA, PID: pf.pidA, Claim: agent, Registry: pf.reg, Paths: []string{pf.dir, pf.sidecar}, Out: &out, Err: &errOut}).Run(); err == nil {
+	two, _, _ := pf.pending(portA, pf.pidA, agent, pf.dir, pf.sidecar)
+	if _, err := two.Run(); err == nil {
 		t.Fatal("expected --claim on two sidecars refused")
 	}
 }

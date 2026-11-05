@@ -98,13 +98,7 @@ func contains(root, key string) bool {
 
 func readInstance(p string) (instance, error) {
 	var in instance
-	f, err := os.Open(p) //nolint:gosec // p is a name of the registry directory
-	if err != nil {
-		return in, err
-	}
-	//nolint:errcheck
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, maxInstanceBytes))
+	data, err := readLimited(p, maxInstanceBytes)
 	if err == nil {
 		err = json.Unmarshal(data, &in)
 	}

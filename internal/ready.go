@@ -100,15 +100,20 @@ func stateOf(rf readyFile, err error) readyState {
 	return st
 }
 
+// readLimited reads at most limit bytes of the file at p: a file another process writes.
+func readLimited(p string, limit int64) ([]byte, error) {
+	f, err := os.Open(p) //nolint:gosec // p is a registry file, a ready file confined by readyPath or named by the agent
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return io.ReadAll(io.LimitReader(f, limit))
+}
+
 // loadReady parses the ready file at p; check isRegular first.
 func loadReady(p string) (readyFile, error) {
 	var rf readyFile
-	f, err := os.Open(p) //nolint:gosec // p is confined to dir by readyPath, or named by the agent
-	if err != nil {
-		return rf, err
-	}
-	data, err := io.ReadAll(io.LimitReader(f, maxReadyBytes))
-	_ = f.Close()
+	data, err := readLimited(p, maxReadyBytes)
 	if err == nil {
 		err = json5.Unmarshal(data, &rf)
 	}

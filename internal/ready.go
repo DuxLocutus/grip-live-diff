@@ -187,7 +187,7 @@ func sendReady(dir http.Dir, target string, rt writeRoute) (readyState, error) {
 			}
 			// A garbage file has no via to rewrite: left to the agent that wrote it. Routing off
 			// knows no owner to rewrite it to.
-			if st.Via == rt.via || err != nil || rt.owner == nil {
+			if st.Via == rt.via || err != nil || !rt.routed() {
 				return st, nil
 			}
 			rf.Via = rt.via

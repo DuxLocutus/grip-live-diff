@@ -376,28 +376,33 @@ func readSidecar(dir http.Dir, target string) (sidecar, error) {
 }
 
 // writeRoute is the registry read a save or a send is checked against: via is the port the
-// reader chose, owner applies the owner rule to the via of a message. The zero value is
-// routing off.
+// reader chose. The zero value is routing off.
 type writeRoute struct {
 	via   int
-	owner func(via int) int
+	key   string
+	peers peers
 }
 
-// owns tells whether the instance via owns a message routed to msgVia; routing off owns all,
-// no instance (via 0) owns nothing.
+// owns tells whether the instance via owns a message routed to msgVia.
 func (rt writeRoute) owns(msgVia int) bool {
-	return rt.owner == nil || (rt.via != 0 && rt.owner(msgVia) == rt.via)
+	return rt.peers.owns(rt.key, msgVia, rt.via)
+}
+
+// owner applies the owner rule to the via of a message.
+func (rt writeRoute) owner(via int) int {
+	return rt.peers.owner(rt.key, via)
+}
+
+// routed is false when routing is off: no owner to re-stamp or rewrite a via to.
+func (rt writeRoute) routed() bool {
+	return rt.peers.self != 0
 }
 
 // route reads the registry once for target: the check of a write, and what the page shows.
 func (s *Server) route(dir http.Dir, target string, asked int) (writeRoute, routingInfo) {
 	key := pageKey(dir, target)
 	p := s.peers()
-	rt := writeRoute{}
-	if s.reg != nil {
-		rt = writeRoute{via: p.pick(key, asked), owner: func(via int) int { return p.owner(key, via) }}
-	}
-	return rt, p.info(s.port, key)
+	return writeRoute{via: p.pick(key, asked), key: key, peers: p}, p.info(s.port, key)
 }
 
 // restamp gives an open entry whose via is gone the port of its owner: its agent may already
@@ -437,7 +442,7 @@ func writeSidecar(dir http.Dir, target string, source []byte, incoming *[]annota
 	if incoming != nil {
 		stored.Annotations = mergeAnnotations(stored.Annotations, *incoming, source, rt.via)
 	}
-	if rt.owner != nil {
+	if rt.routed() {
 		restamp(stored.Annotations, rt.owner)
 	}
 	stored.Revisions, err = syncRevisions(revisionsDir(dir, target), stored.Annotations, source, fileHash(source))

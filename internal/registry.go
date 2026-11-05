@@ -189,6 +189,12 @@ func (p peers) owner(key string, via int) int {
 	return first
 }
 
+// owns tells whether the instance on port owns a message on key routed to via. Routing off
+// (self 0) owns all; no port owns nothing.
+func (p peers) owns(key string, via, port int) bool {
+	return p.self == 0 || (port != 0 && p.owner(key, via) == port)
+}
+
 // targets is where the reader can send a message on key: this instance when its root contains
 // key, then the other instances that have the page open and whose root contains it.
 func (p peers) targets(key string) []int {

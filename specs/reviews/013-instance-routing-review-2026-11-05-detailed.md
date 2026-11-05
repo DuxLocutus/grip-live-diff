@@ -133,6 +133,7 @@ Revue de [013-instance-routing](../013-instance-routing.md). Commande `review-lo
 - Gravité corrigée : Low → Medium (doctrine, Medium : logique dupliquée).
 - Correctif proposé (inst) : une méthode `pf.pending(port, pid, claim, paths...)` utilisée par `run` et par ces appels.
 - Verdict : fix.
+- Fix : méthode `pf.pending` qui construit `Pending` et ses tampons, utilisée par `run` et `TestPendingClaim`, `TestPendingResolvesThePath`. `inst`. Commits `1952c83`.
 
 <a id="w-finding-008"></a>
 ### W-FINDING-008 · `pf.write` et `pf.ready` refont `writeFile`
@@ -143,6 +144,7 @@ Revue de [013-instance-routing](../013-instance-routing.md). Commande `review-lo
 - Gravité corrigée : Low → Medium (doctrine, Medium : implémentation parallèle d'un utilitaire existant).
 - Correctif proposé (inst) : `writeFile(pf.t, pf.dir, …)` dans `write` et `ready`.
 - Verdict : fix.
+- Fix : `pf.write` et `pf.ready` passent par `writeFile`. `inst`. Commits `1952c83`.
 
 <a id="w-finding-009"></a>
 ### W-FINDING-009 · La closure `pages` de `newRoutedFixtureOn` copie la map à la main
@@ -224,6 +226,7 @@ Revue de [013-instance-routing](../013-instance-routing.md). Commande `review-lo
 - Preuve : worktree jetable sur HEAD, mutant `exclusive = false`, `go test -count=1 ./internal/ -run 'TestPending|TestFindSidecars'` → `ok`; `go test -count=1 ./cmd/` → `ok`.
 - Correctif proposé (class) : test dans `internal/pending_test.go` : tenir `lockSidecar(pf.sidecar, os.O_RDONLY, false)`, lancer `--claim` dans une goroutine, vérifier qu'il ne rend pas avant `releaseSidecar`, puis qu'il écrit `pid`.
 - Verdict : fix.
+- Fix : `TestPendingClaimWaitsForTheLock` : un verrou partagé tenu, `--claim` ne rend pas avant `releaseSidecar`, puis écrit `pid` ; échoue avec le mutant `exclusive = false`. `class`. Commits `dec55a5`.
 
 <a id="w-finding-017"></a>
 ### W-FINDING-017 · Pas de test du re-contrôle du trigger manuel par `--claim`
@@ -233,6 +236,7 @@ Revue de [013-instance-routing](../013-instance-routing.md). Commande `review-lo
 - Preuve : même worktree et même commande que [W-FINDING-016](#w-finding-016), mutant combiné → `ok` sur `./internal/` et `./cmd/`.
 - Correctif proposé (inst) : dans `TestPendingClaim`, un cas `pf.write(triggerAuto)` avec un ready file de A non pris : `found == false`, sortie vide, ready file inchangé.
 - Verdict : fix.
+- Fix : cas `triggerAuto` dans `TestPendingClaim` : refus, sortie vide, ready file inchangé ; échoue sans le re-contrôle. `inst`. Commits `dec55a5`.
 
 <a id="w-finding-018"></a>
 ### W-FINDING-018 · Pas de test du 400 sur un corps de POST ready illisible
@@ -381,6 +385,7 @@ Revue de [013-instance-routing](../013-instance-routing.md). Commande `review-lo
 - Preuve : `internal/pending_test.go:95` `asleep := livePID(t)` ; `:107`.
 - Correctif proposé (inst) : renommer en `noFile`.
 - Verdict : fix.
+- Fix : `asleep` renommé `noFile`. `inst`. Commits `1952c83`.
 
 <a id="w-finding-033"></a>
 ### W-FINDING-033 · Fichiers temporaires `.<pid>.json-*` jamais purgés

@@ -204,6 +204,10 @@
     return doc.targets || [];
   }
 
+  function live() {
+    return doc.live || [];
+  }
+
   // The stored choice while it is a target, else the first target; 0 lets the server pick.
   function chosen() {
     var stored = 0;
@@ -510,7 +514,7 @@
   // Where a reader message went, when not to this instance's agent.
   function routeOf(m) {
     if (m.by !== "reader" || !m.via || m.via === doc.self) return "";
-    return " → :" + m.via + ((doc.live || []).indexOf(m.via) < 0 ? " (gone)" : "");
+    return " → :" + m.via + (live().indexOf(m.via) < 0 ? " (gone)" : "");
   }
 
   // A link to the diff against the version the entry was written on, when the server kept

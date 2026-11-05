@@ -24,7 +24,8 @@ var rootCmd = &cobra.Command{
 		}
 
 		parser := internal.NewParser()
-		server := internal.NewServer(host, port, boundingBox, browser, !noReload, parser, internal.DefaultSettingsPath(), internal.DefaultRegistryDir())
+		server := internal.NewServer(host, port, boundingBox, browser, !noReload, parser, internal.DefaultSettingsPath())
+		server.UseRegistry(internal.DefaultRegistryDir())
 		return server.Serve(file)
 	},
 }

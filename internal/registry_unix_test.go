@@ -48,7 +48,9 @@ func TestServeHelper(t *testing.T) {
 	if reg == "" {
 		t.Skip("helper process only")
 	}
-	if err := NewServer("localhost", 0, false, false, false, NewParser(), "", reg).Serve(docs); err != nil {
+	s := NewServer("localhost", 0, false, false, false, NewParser(), "")
+	s.UseRegistry(reg)
+	if err := s.Serve(docs); err != nil {
 		t.Fatal(err)
 	}
 }

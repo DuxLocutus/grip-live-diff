@@ -113,10 +113,9 @@ func isGitWorkTree(dir http.Dir) bool {
 	return exec.CommandContext(ctx, "git", "-C", string(dir), "rev-parse", "--is-inside-work-tree").Run() == nil
 }
 
-func NewServer(host string, port int, boundingBox bool, browser bool, enableReload bool, parser *Parser, settingsPath, registryDir string) *Server {
+func NewServer(host string, port int, boundingBox bool, browser bool, enableReload bool, parser *Parser, settingsPath string) *Server {
 	return &Server{
 		settingsPath: settingsPath,
-		registryDir:  registryDir,
 		regEvery:     registryEvery,
 		out:          os.Stdout,
 		host:         host,
@@ -128,6 +127,11 @@ func NewServer(host string, port int, boundingBox bool, browser bool, enableRelo
 		reload:       newReloader(),
 		snapshots:    make(map[string]*snapshot),
 	}
+}
+
+// UseRegistry turns routing on, with the instance registry in dir; "" leaves it off.
+func (s *Server) UseRegistry(dir string) {
+	s.registryDir = dir
 }
 
 // record updates the references of path and returns them. prev only moves when the

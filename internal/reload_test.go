@@ -145,7 +145,7 @@ func TestReloadScriptFollowsTheFlag(t *testing.T) {
 
 	for _, on := range []bool{true, false} {
 		f := &diffFixture{t: t, dir: t.TempDir()}
-		f.handler = NewServer("localhost", 6419, false, false, on, NewParser(), "", "").newHandler(http.Dir(f.dir))
+		f.handler = NewServer("localhost", 6419, false, false, on, NewParser(), "").newHandler(http.Dir(f.dir))
 		f.write("# Title\n")
 		if got := strings.Contains(f.get(docPath), reloadEndpoint); got != on {
 			t.Fatalf("reload %v: expected script presence %v, got %v", on, on, got)
@@ -159,7 +159,7 @@ func TestReloadScriptOffersEveryReloadAsACancelableEvent(t *testing.T) {
 	t.Parallel()
 
 	f := &diffFixture{t: t, dir: t.TempDir()}
-	f.handler = NewServer("localhost", 6419, false, false, true, NewParser(), "", "").newHandler(http.Dir(f.dir))
+	f.handler = NewServer("localhost", 6419, false, false, true, NewParser(), "").newHandler(http.Dir(f.dir))
 	f.write("# Title\n")
 	page := f.get(docPath)
 

@@ -18,7 +18,7 @@ func settingsServer(t *testing.T, path string) *httptest.Server {
 	if err := os.WriteFile(filepath.Join(dir, "doc.md"), []byte("# doc\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(NewServer("localhost", 0, false, false, false, NewParser(), path, "").newHandler(http.Dir(dir)))
+	srv := httptest.NewServer(NewServer("localhost", 0, false, false, false, NewParser(), path).newHandler(http.Dir(dir)))
 	t.Cleanup(srv.Close)
 	return srv
 }

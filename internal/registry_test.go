@@ -288,7 +288,8 @@ type served struct {
 // end of the test; tune adjusts the server before it starts.
 func serveInstance(t *testing.T, arg, reg string, reload bool, tune func(*Server)) *served {
 	t.Helper()
-	s := NewServer("localhost", 0, false, false, reload, NewParser(), "", reg)
+	s := NewServer("localhost", 0, false, false, reload, NewParser(), "")
+	s.UseRegistry(reg)
 	s.regEvery = 50 * time.Millisecond
 	s.signals = make(chan os.Signal, 1)
 	out := newSyncBuffer()
@@ -395,7 +396,8 @@ func TestServeOnATakenPort(t *testing.T) {
 	first.stop(t)
 
 	taken := serveInstance(t, docs, t.TempDir(), false, nil)
-	s := NewServer("localhost", taken.port, false, false, false, NewParser(), "", reg)
+	s := NewServer("localhost", taken.port, false, false, false, NewParser(), "")
+	s.UseRegistry(reg)
 	out := newSyncBuffer()
 	s.out = out
 	if err := s.Serve(docs); err == nil {
@@ -559,7 +561,7 @@ func newRoutedFixture(t *testing.T, content string) *routedFixture {
 func newRoutedFixtureOn(t *testing.T, content string, port int) *routedFixture {
 	t.Helper()
 	f := &diffFixture{t: t, dir: t.TempDir()}
-	s := NewServer("localhost", port, false, false, false, NewParser(), "", "")
+	s := NewServer("localhost", port, false, false, false, NewParser(), "")
 	f.handler = s.newHandler(http.Dir(f.dir))
 	f.write(content)
 	rf := &routedFixture{diffFixture: f, reg: t.TempDir(), key: pageKey(http.Dir(f.dir), docPath), out: &bytes.Buffer{}, open: map[string]string{}}

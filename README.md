@@ -208,7 +208,7 @@ An agent learns which entries are its own from gld, not by parsing the sidecar:
 
 ```bash
 grip-live-diff pending --port 6420 --pid 4242 docs/specs      # a sidecar, markdown or ready file, or a directory
-# docs/specs/toto.annotations.json5	k3f9x2                    # one line per open entry; exit 1 when none
+# docs/specs/toto.annotations.json5	k3f9x2                    # one line per open entry; exit 1 when none, 2 on an error
 grip-live-diff pending --port 6420 --pid 4242 --claim "$PPID" docs/specs/toto.annotations.json5
 ```
 

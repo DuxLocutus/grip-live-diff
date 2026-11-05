@@ -31,8 +31,12 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	err := rootCmd.Execute()
+	cmd, err := rootCmd.ExecuteC()
 	if err != nil {
+		// pending exits 1 when there is nothing to do: a wrong flag must not read as that.
+		if cmd == pendingCmd {
+			os.Exit(2)
+		}
 		os.Exit(1)
 	}
 }

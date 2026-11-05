@@ -118,9 +118,11 @@ computed in one place, by gld, not by each agent's script.
   - trigger manual: when a ready file stands with `pid` null and its owner is the instance, one line
     `<sidecar>\tready`, then the lines of the open entries owned by the instance.
   The owner of a ready file is the owner rule applied to its `via`. A sidecar that cannot be read
-  is reported on stderr and skipped. Exit 0 when a line is printed, 1 when none. The instance is
+  is reported on stderr and skipped. Exit 0 when a line is printed, 1 when none, 2 when the
+  instance is gone, a path does not exist or an argument is wrong: a Monitor that loops on 1 stops.
+  The instance is
   `--port` and `--pid`:
-  - its PID is dead: nothing is owned, stderr says the instance is gone;
+  - its PID is dead: nothing is owned, stderr says the instance is gone, exit 2;
   - its PID is alive and the registry holds no file for it (registry off: the start writes the file
     before the start line): it owns every open entry, today's behaviour;
   - its file is there but not live (stopped, asleep), or names another port: nothing is owned.
@@ -189,7 +191,8 @@ computed in one place, by gld, not by each agent's script.
       naming A rewrites `via` = A.
 - [x] **AC12** `pending`: given entries routed to A, to B, gone, and absent, `--port A` lists A's
       and those whose owner is A by the lowest-port rule, exit 0; `--port B` lists only B's;
-      given a dead `--pid`, nothing, exit 1; given a manual sidecar, `ready` and its entries only
+      given a dead `--pid`, nothing, exit 2; given a missing path or a wrong flag, exit 2; given a
+      manual sidecar, `ready` and its entries only
       when the ready file is A's and unclaimed; given A's file with an old `seen_at`, nothing; given
       no file and a live PID, every open entry. `--claim` writes `pid` only when the ready file is
       still A's and unclaimed under the flock: given it replaced by a ready file of B between

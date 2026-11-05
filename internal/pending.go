@@ -25,14 +25,16 @@ type Pending struct {
 	Out, Err io.Writer
 }
 
+// ErrInstanceGone is returned by Run when the PID of the instance is dead.
+var ErrInstanceGone = errors.New("instance gone")
+
 // Run prints the lines and tells whether it printed one. A sidecar it cannot read is reported on
 // Err and skipped.
 func (p Pending) Run() (bool, error) {
 	if !pidAlive(p.PID) {
-		_, _ = fmt.Fprintf(p.Err, "instance :%d (pid %d) is gone: nothing is its own\n", p.Port, p.PID)
 		// Its file, if any, goes with the other dead ones.
 		scanRegistry(p.Registry)
-		return false, nil
+		return false, fmt.Errorf("%w: :%d (pid %d), nothing is its own", ErrInstanceGone, p.Port, p.PID)
 	}
 	owns := p.owns()
 	sidecars, err := findSidecars(p.Paths, p.Err)
@@ -87,7 +89,11 @@ func (p Pending) owns() func(key string, via int) bool {
 func findSidecars(paths []string, errOut io.Writer) ([]string, error) {
 	var out []string
 	for _, p := range paths {
-		if info, err := os.Stat(p); err == nil && info.IsDir() {
+		info, err := os.Stat(p)
+		if errors.Is(err, fs.ErrNotExist) && !strings.HasSuffix(p, sidecarSuffix) && !strings.HasSuffix(p, readySuffix) {
+			return nil, fmt.Errorf("%s: no such file or directory", p)
+		}
+		if err == nil && info.IsDir() {
 			// The trailing separator makes WalkDir follow a symlinked directory: it Lstats its
 			// root.
 			err := filepath.WalkDir(p+string(filepath.Separator), func(q string, d fs.DirEntry, err error) error {

@@ -55,7 +55,8 @@ const sidecarHeader = `// grip-live-diff annotations for %s. JSON5: comments and
 //   grip-live-diff pending --port <port> --pid <pid> <this file>
 // with the port and PID of the start line of the preview you started ("Starting server:
 // http://localhost:<port>/... (pid <pid>)"), and handle only the entries it lists, one
-// "<sidecar><TAB><id>" line each; exit 1 lists none. The others are another agent's. In manual,
+// "<sidecar><TAB><id>" line each; exit 1 lists none; exit 2: your instance is gone or a
+// path or argument is wrong, start it again. The others are another agent's. In manual,
 // handle the entries of a ready batch once you claimed it: the claim lists them (below).
 //
 // trigger is the reader's: "auto" (absent too) or "manual". In manual, a change to this file is

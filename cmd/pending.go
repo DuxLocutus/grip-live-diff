@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 
 	"github.com/babs/grip-live-diff/internal"
@@ -11,7 +12,8 @@ var pendingCmd = &cobra.Command{
 	Use:   "pending --port <port> --pid <pid> [--claim <agent pid>] <path>...",
 	Short: "List the open annotation entries the agent of an instance must handle",
 	Long: `List the open annotation entries the agent of an instance must handle, one
-"<sidecar>\t<entry id>" line each; exit 1 when there is none.
+"<sidecar>\t<entry id>" line each; exit 1 when there is none, 2 when the instance is gone or a
+path or an argument is wrong.
 
 <path> is a sidecar, a markdown file, a ready file or a directory (its sidecars, recursively); a
 sidecar that cannot be read is reported and skipped. The instance is the port and PID of its start
@@ -33,7 +35,9 @@ unclaimed; --claim <agent pid> takes it, under the sidecar flock, and takes exac
 			Err:      os.Stderr,
 		}.Run()
 		if err != nil {
-			return err
+			// 1 is "nothing to do": a Monitor looping on it must stop on an error.
+			_, _ = fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(2)
 		}
 		if !found {
 			os.Exit(1)

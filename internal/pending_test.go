@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -66,6 +67,9 @@ func (pf *pendingFixture) run(port int, pid, claim int64) ([]string, bool, strin
 	pf.t.Helper()
 	cmd, out, errOut := pf.pending(port, pid, claim, pf.dir)
 	found, err := cmd.Run()
+	if errors.Is(err, ErrInstanceGone) {
+		return nil, false, err.Error()
+	}
 	if err != nil {
 		pf.t.Fatal(err)
 	}

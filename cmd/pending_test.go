@@ -20,7 +20,8 @@ func TestPendingHelper(t *testing.T) {
 	Execute()
 }
 
-// 013-AC12: exit 0 when a line is printed, 1 when none.
+// 013-AC12: exit 0 when a line is printed, 1 when none, 2 when the instance is gone or a path is
+// missing: a Monitor that loops on 1 must stop.
 func TestPendingExitCode(t *testing.T) {
 	t.Parallel()
 
@@ -34,18 +35,31 @@ func TestPendingExitCode(t *testing.T) {
 	}
 	// No registry file for this PID: routing off, every open entry is its own.
 	pid := strconv.Itoa(os.Getpid())
+	exited := exec.Command(os.Args[0], "-test.run=^$") //nolint:gosec // the test binary itself
+	if err := exited.Run(); err != nil {
+		t.Fatal(err)
+	}
+	dead := strconv.Itoa(exited.Process.Pid)
 	for _, tc := range []struct {
 		file string
+		pid  string
 		code int
 		out  string
 	}{
-		{"a.annotations.json5", 0, "\te1\n"},
-		{"b.annotations.json5", 1, ""},
+		{"a.annotations.json5", pid, 0, "\te1\n"},
+		{"b.annotations.json5", pid, 1, ""},
+		{"a.annotations.json5", dead, 2, ""},
+		{"missing", pid, 2, ""},
+		{"--port=x", pid, 2, ""},
 	} {
+		arg := filepath.Join(dir, tc.file)
+		if strings.HasPrefix(tc.file, "--") {
+			arg = tc.file
+		}
 		home := t.TempDir()
 		cmd := exec.Command(os.Args[0], "-test.run=^TestPendingHelper$") //nolint:gosec // the test binary itself
 		cmd.Env = append(os.Environ(), "HOME="+home, "XDG_CACHE_HOME="+home, "LOCALAPPDATA="+home,
-			"GLD_TEST_PENDING_ARGS="+strings.Join([]string{"pending", "--port", "6419", "--pid", pid, filepath.Join(dir, tc.file)}, "\n"))
+			"GLD_TEST_PENDING_ARGS="+strings.Join([]string{"pending", "--port", "6419", "--pid", tc.pid, arg}, "\n"))
 		out, err := cmd.Output()
 		code := 0
 		var exit *exec.ExitError
@@ -55,7 +69,7 @@ func TestPendingExitCode(t *testing.T) {
 			t.Fatal(err)
 		}
 		if code != tc.code || !strings.Contains(string(out), tc.out) {
-			t.Errorf("%s: expected exit %d and %q, got %d %q", tc.file, tc.code, tc.out, code, out)
+			t.Errorf("%s, pid %s: expected exit %d and %q, got %d %q", tc.file, tc.pid, tc.code, tc.out, code, out)
 		}
 	}
 }

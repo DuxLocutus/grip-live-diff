@@ -283,10 +283,10 @@ func (g *registry) path() string {
 	return filepath.Join(g.dir, strconv.FormatInt(g.pid, 10)+".json")
 }
 
-// self is this instance as the others read it.
-func (g *registry) self() instance {
+// self is this instance as the others read it, with the pages open.
+func (g *registry) self(open map[string]string) instance {
 	keys := []string{}
-	for _, k := range g.pages() {
+	for _, k := range open {
 		if !slices.Contains(keys, k) {
 			keys = append(keys, k)
 		}
@@ -305,11 +305,11 @@ func (g *registry) start() error {
 		return err
 	}
 	scanRegistry(g.dir)
-	return g.write()
+	return g.write(g.self(g.pages()))
 }
 
-func (g *registry) write() error {
-	data, err := json.MarshalIndent(g.self(), "", "  ")
+func (g *registry) write(me instance) error {
+	data, err := json.MarshalIndent(me, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -318,7 +318,12 @@ func (g *registry) write() error {
 
 // read returns the live instances: the others from their files, this one as it stands.
 func (g *registry) read() peers {
-	live := []instance{g.self()}
+	return g.readWith(g.self(g.pages()))
+}
+
+// readWith is read with this instance as me.
+func (g *registry) readWith(me instance) peers {
+	live := []instance{me}
 	for _, in := range liveOf(scanRegistry(g.dir), time.Now(), g.liveFor) {
 		if in.PID != g.pid {
 			live = append(live, in)
@@ -337,8 +342,10 @@ func (g *registry) tick() {
 	if g.closed {
 		return
 	}
+	open := g.pages()
+	me := g.self(open)
 	// Logged once per run of failures: past registryLive, the others no longer see this instance.
-	switch err := g.write(); {
+	switch err := g.write(me); {
 	case err != nil && !g.failLogged:
 		g.failLogged = true
 		log.Println("registry:", err)
@@ -346,11 +353,10 @@ func (g *registry) tick() {
 		g.failLogged = false
 		log.Println("registry: heartbeat written again")
 	}
-	p := g.read()
+	p := g.readWith(me)
 	live := p.ports()
 	liveChanged := g.live != nil && !slices.Equal(g.live, live)
 	g.live = live
-	open := g.pages()
 	for page, key := range open {
 		for _, in := range p.live {
 			if in.PID == g.pid || !slices.Contains(in.Pages, key) {

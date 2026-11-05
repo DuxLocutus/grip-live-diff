@@ -68,7 +68,6 @@ type Server struct {
 	registryDir  string // "" when routing is off
 	reg          *registry
 	regEvery     time.Duration
-	regLive      time.Duration
 	out          io.Writer
 	signals      chan os.Signal // tests only; nil listens to SIGINT and SIGTERM
 
@@ -119,7 +118,6 @@ func NewServer(host string, port int, boundingBox bool, browser bool, enableRelo
 		settingsPath: settingsPath,
 		registryDir:  registryDir,
 		regEvery:     registryEvery,
-		regLive:      registryLive,
 		out:          os.Stdout,
 		host:         host,
 		port:         port,
@@ -280,7 +278,7 @@ func (s *Server) startRegistry(dir http.Dir, root string) {
 		return
 	}
 	g := newRegistry(s.registryDir, s.port, root, s.out)
-	g.every, g.liveFor = s.regEvery, s.regLive
+	g.every = s.regEvery
 	g.pages = func() map[string]string {
 		out := map[string]string{}
 		for _, page := range s.reload.openPages() {

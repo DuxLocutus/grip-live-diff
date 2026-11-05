@@ -242,12 +242,11 @@ func (p peers) info(self int, key string) routingInfo {
 
 // registry keeps the file of this instance and reads the others.
 type registry struct {
-	dir     string
-	pid     int64
-	port    int
-	root    string
-	every   time.Duration
-	liveFor time.Duration
+	dir   string
+	pid   int64
+	port  int
+	root  string
+	every time.Duration
 	// pages maps the URL paths open in this instance to their sidecar key; notify tells the
 	// sockets of a page to refetch its annotations.
 	pages  func() map[string]string
@@ -270,7 +269,6 @@ func newRegistry(dir string, port int, root string, out io.Writer) *registry {
 		port:    port,
 		root:    root,
 		every:   registryEvery,
-		liveFor: registryLive,
 		pages:   func() map[string]string { return nil },
 		notify:  func(string) {},
 		out:     out,
@@ -322,7 +320,7 @@ func (g *registry) read() peers {
 // readWith is read with this instance as me.
 func (g *registry) readWith(me instance) peers {
 	live := []instance{me}
-	for _, in := range liveOf(scanRegistry(g.dir), time.Now(), g.liveFor) {
+	for _, in := range liveOf(scanRegistry(g.dir), time.Now(), registryLive) {
 		if in.PID != g.pid {
 			live = append(live, in)
 		}

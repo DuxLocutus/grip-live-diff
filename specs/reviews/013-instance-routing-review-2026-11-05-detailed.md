@@ -11,13 +11,13 @@ reviewed: specs/013-instance-routing.md
 <!-- synthesis -->
 # Revue de code · feat/instance-routing, 2026-11-05
 
-Revue de la branche `feat/instance-routing` (spec 013) depuis `develop`. Deux tours : 33 findings au tour 1, 31 corrigés, 2 sans suite ; le tour 2 sur les corrections est sec. Une question vous attend, ouverte avant la revue.
+Revue de la branche `feat/instance-routing` (spec 013) depuis `develop`. Deux tours : 33 findings au tour 1, 31 corrigés, 2 sans suite ; le tour 2 sur les corrections est sec. La question ouverte avant la revue est close.
 
 Revue de [013-instance-routing](../013-instance-routing.md). Commande `review-loop 3 iteration`. Base `e24fad1`, HEAD de départ `ea1c44f`, HEAD de fin `70c9576`. Angles : functional, tests, code-quality (par module M1 registry & pending, M2 serveur, M3 page), security, resiliency, docs. Arrêt : tour sans correction, tous les angles secs (tour 2). Contrôles : `go test -count=1 ./... && GOOS=windows go build ./... && golangci-lint run && gofmt -l . && scripts/e2e/run.sh` : ok sur `4bdc6ac` (la suite ne change que des documents de revue).
 
 ## Ce qui vous attend
 
-- [013-QUESTION-01](013-questions-open.md#013-question-01) · instance vivante dont le battement échoue : possède-t-elle ses fils ? (revue informelle, R1-11)
+Rien ne vous attend. [013-QUESTION-01](013-questions-closed.md#013-question-01) est close : option (b), appliquée après la revue.
 
 ## Findings
 

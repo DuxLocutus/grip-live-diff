@@ -17,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -256,6 +257,7 @@ type registry struct {
 	mu         sync.Mutex
 	closed     bool
 	failLogged bool
+	written    atomic.Int64        // unix nanoseconds of the last heartbeat on disk; read unlocked
 	warned     map[string]struct{} // sidecar key + PID of the other instance
 	targets    map[string][]int    // URL path -> targets at the last read
 	live       []int               // ports at the last read; nil before the first
@@ -309,7 +311,11 @@ func (g *registry) write(me instance) error {
 	if err != nil {
 		return err
 	}
-	return replaceFile(g.path(), 0o600, append(data, '\n'))
+	if err := replaceFile(g.path(), 0o600, append(data, '\n')); err != nil {
+		return err
+	}
+	g.written.Store(time.Now().UnixNano())
+	return nil
 }
 
 // read returns the live instances: the others from their files, this one as it stands.
@@ -317,8 +323,12 @@ func (g *registry) read() peers {
 	return g.readWith(g.self(g.pages()))
 }
 
-// readWith is read with this instance as me.
+// readWith is read with this instance as me. A heartbeat not on disk for registryLive turns
+// routing off: the others and pending no longer see this instance, a via to it would go elsewhere.
 func (g *registry) readWith(me instance) peers {
+	if time.Since(time.Unix(0, g.written.Load())) >= registryLive {
+		return peers{}
+	}
 	live := []instance{me}
 	for _, in := range liveOf(scanRegistry(g.dir), time.Now(), registryLive) {
 		if in.PID != g.pid {

@@ -69,6 +69,9 @@ computed in one place, by gld, not by each agent's script.
 - On SIGINT or SIGTERM, the instance removes its file, then exits.
 - A registry that cannot be written (read-only cache dir): logged once, the server runs, routing is
   off: no `via` written, no banner.
+- A heartbeat that fails while the server runs: routing is off once the file of the instance is
+  `registryLive` (60 s) old, as the others and `pending` no longer see it; on again at the next
+  heartbeat written.
 
 ### Detection
 
@@ -168,7 +171,8 @@ computed in one place, by gld, not by each agent's script.
 - [x] **AC5** Given SIGINT or SIGTERM, the instance removes its file.
 - [x] **AC6** Given a read-only registry dir, the server serves pages, logs once, the annotations
       API reports no other target and writes no `via`; `pending` for that instance lists every open
-      entry.
+      entry. Given a heartbeat that fails for 60 s while the server runs, routing is off until a
+      heartbeat is written again.
 - [x] **AC7** Given the same file open in A and B, B serving a parent dir through a symlinked
       directory, A reports `targets` = [A, B] and `self` = A, and prints the warning line once.
       Given a symlinked file, the two pages do not share a key, and A started on the directory of

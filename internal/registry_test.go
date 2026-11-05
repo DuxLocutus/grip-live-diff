@@ -207,6 +207,7 @@ func TestScanRegistry(t *testing.T) {
 	}
 
 	g := newRegistry(dir, portA+100, "/nowhere", &bytes.Buffer{})
+	g.written.Store(time.Now().UnixNano()) // as after a start, which would purge the stopped one
 	if ports := g.read().ports(); !reflect.DeepEqual(ports, []int{portC, portA + 100}) {
 		t.Errorf("expected the stopped instance out of the read, got %v", ports)
 	}
@@ -536,6 +537,41 @@ func TestHeartbeatFailureLogged(t *testing.T) {
 	out := logs.String()
 	if failed, back := strings.Count(out, "permission denied"), strings.Count(out, "heartbeat written again"); failed != 2 || back != 1 {
 		t.Fatalf("expected two failures and one recovery logged, got %q", out)
+	}
+}
+
+// 013-QUESTION-01: a heartbeat that fails past registryLive turns routing off, as the others and
+// pending no longer see this instance; a failure within it keeps routing on.
+func TestStaleHeartbeatTurnsRoutingOff(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX permissions enforced on a non-root user")
+	}
+	captureLog(t)
+	dir := filepath.Join(t.TempDir(), "instances")
+	g := newRegistry(dir, portA, "/nowhere", &bytes.Buffer{})
+	if err := g.start(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	g.tick()
+	if p := g.read(); p.self != portA {
+		t.Fatalf("expected routing on within registryLive, got self %d", p.self)
+	}
+	g.written.Store(time.Now().Add(-2 * registryLive).UnixNano())
+	g.tick()
+	if p := g.read(); p.self != 0 || len(p.live) != 0 {
+		t.Fatalf("expected routing off past registryLive, got %+v", p)
+	}
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	g.tick()
+	if p := g.read(); p.self != portA {
+		t.Fatalf("expected routing back once written, got self %d", p.self)
 	}
 }
 

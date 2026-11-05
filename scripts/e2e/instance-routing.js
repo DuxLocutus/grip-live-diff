@@ -144,5 +144,13 @@ run(async () => {
   await waitFor(`[...document.querySelectorAll(".annotations-list .annot-msg-reader small")].some((s) => s.textContent.endsWith("(gone)"))`, 5000).catch(() => {});
   check("message shows (gone)", (await labels())[0].endsWith("→ :" + portB + " (gone)"), await labels());
 
+  // The batch sent to B, gone: Go hands it to A, its owner now.
+  const go = `(() => { const g = document.getElementById("annotation-go"); return g.textContent + (g.disabled ? " [disabled]" : " [enabled]") })()`;
+  await waitFor(`${go} === "Sent → :${portB} (gone) [enabled]"`).catch(() => {});
+  check("batch of a gone B: Go enabled", (await ev(go)) === `Sent → :${portB} (gone) [enabled]`, await ev(go));
+  await ev(`document.getElementById("annotation-go").click()`);
+  await waitFor(`document.getElementById("annotation-go").textContent === "Sent → :${portA}"`).catch(() => {});
+  check("Go rewrites the via of the batch to A", readyFile().via === Number(portA), readyFile());
+
   check("no page exceptions / console errors", consoleErrors.length === 0, consoleErrors);
 });

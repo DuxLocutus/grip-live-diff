@@ -268,6 +268,12 @@
     return manual() && (state === "sent" || state === "working");
   }
 
+  // A sent batch whose instance is gone: Go hands it to its owner, which the server writes as via.
+  function orphaned() {
+    var ready = doc.ready || {};
+    return queued() && ready.state === "sent" && !!ready.via && live().indexOf(ready.via) < 0;
+  }
+
   function drawTrigger() {
     var mode = document.getElementById("annotation-mode");
     if (!mode) return;
@@ -285,9 +291,9 @@
     // Gone too: with nothing open, ✕ is the only way to clear a dead agent's batch.
     cancel.hidden = !manual() || ready.state === "none";
     go.setAttribute("data-state", ready.state);
-    go.textContent = { sent: "Sent" + (ready.via ? " → :" + ready.via : ""), working: "Agent working · pid " + ready.pid, gone: "Agent gone · pid " + ready.pid }[ready.state] || "Go";
-    go.disabled = queued() || !open;
-    go.title = queued() ? "The agent has the batch; ✕ cancels it" : !open ? "Nothing to send: no entry waits for the agent" : ready.state === "gone" ? "The agent exited: send the batch again" : "Send every open entry to the agent";
+    go.textContent = { sent: "Sent" + (ready.via ? " → :" + ready.via + (orphaned() ? " (gone)" : "") : ""), working: "Agent working · pid " + ready.pid, gone: "Agent gone · pid " + ready.pid }[ready.state] || "Go";
+    go.disabled = (queued() && !orphaned()) || !open;
+    go.title = orphaned() ? "The instance of the batch is gone: send it to the one that owns it" : queued() ? "The agent has the batch; ✕ cancels it" : !open ? "Nothing to send: no entry waits for the agent" : ready.state === "gone" ? "The agent exited: send the batch again" : "Send every open entry to the agent";
     var status = document.getElementById("annotation-trigger-state"), label = manual() ? go.textContent : "";
     if (status.textContent !== label) status.textContent = label;
     // Live only once the first label is in: a page load must not announce it.

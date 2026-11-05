@@ -167,6 +167,10 @@ run(async () => {
   await waitFor(`!document.querySelector(".annot-box").matches(":popover-open")`);
   const asked = await ev(`window.__puts.map((b) => JSON.parse(b).via)`);
   check("stored B, gone from targets: the PUT names A", asked.length === 1 && asked[0] === Number(portA), asked);
+  await waitFor(`document.querySelectorAll(".annotations-list .annot-msg-reader small").length === 2`);
+  // The save re-stamped the gone via of the first message to A as well: both are A's.
+  const vias = sidecarJSON().annotations.map((a) => a.thread[a.thread.length - 1].via);
+  check("messages to A show no arrow", vias.every((v) => v === Number(portA)) && (await labels()).every((l) => !l.includes("→")), { vias, labels: await labels() });
 
   check("no page exceptions / console errors", consoleErrors.length === 0, consoleErrors);
 });

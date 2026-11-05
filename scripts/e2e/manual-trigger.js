@@ -23,6 +23,9 @@ const ui = () =>
   ev(`(() => { const m = document.getElementById("annotation-mode"), g = document.getElementById("annotation-go"), c = document.getElementById("annotation-cancel");
     return { mode: m.hidden ? "(hidden)" : m.textContent + " pressed=" + m.getAttribute("aria-pressed"), go: g.hidden ? "(hidden)" : g.textContent + (g.disabled ? " [disabled: " + g.title + "]" : " [enabled]"),
       cancel: c.hidden ? "(hidden)" : "visible", err: document.getElementById("annotation-trigger-error").textContent, marker: window.__marker || null } })()`);
+// The label of Go once the batch is sent to this instance.
+const SENT = "Sent → :" + port;
+const waitSent = () => waitFor(`document.getElementById("annotation-go").textContent === ${JSON.stringify(SENT)}`);
 const sidecarJSON = () => JSON.parse(fs.readFileSync(sidecar, "utf8").replace(/^\/\/.*$/gm, ""));
 // Waits until no annotations GET has started for 1 s: pending sidecar events have landed.
 async function settle() {
@@ -89,7 +92,7 @@ run(async () => {
 
   // Go.
   await click("annotation-go");
-  await waitFor(`document.getElementById("annotation-go").textContent === "Sent → :${port}"`);
+  await waitSent();
   check("ready file written", fs.existsSync(ready), fs.readFileSync(ready, "utf8").trim());
   console.log("sent ui", await ui());
 
@@ -115,7 +118,7 @@ run(async () => {
 
   // A GET sent before ✕ but answered after it must not bring "working" back.
   await click("annotation-go");
-  await waitFor(`document.getElementById("annotation-go").textContent === "Sent → :${port}"`);
+  await waitSent();
   fs.writeFileSync(ready, JSON.stringify({ sent_at: new Date().toISOString(), pid: process.pid, claimed_at: new Date().toISOString() }));
   await waitFor(`document.getElementById("annotation-go").textContent === "Agent working · pid ${process.pid}"`);
   await sleep(300);
@@ -129,9 +132,9 @@ run(async () => {
   // Cancel, with focus handed between Go and ✕ and the state announced.
   await ev(`document.getElementById("annotation-go").focus()`);
   await click("annotation-go");
-  await waitFor(`document.getElementById("annotation-go").textContent === "Sent → :${port}"`);
+  await waitSent();
   check("focus Go -> Go disabled -> focus on ✕", (await ev(`document.activeElement.id`)) === "annotation-cancel", await ev(`document.activeElement.id`));
-  check("live region says Sent", (await ev(`(() => { const s = document.getElementById("annotation-trigger-state"); return s.getAttribute("aria-live") + ":" + s.textContent })()`)) === "polite:Sent → :" + port);
+  check("live region says Sent", (await ev(`(() => { const s = document.getElementById("annotation-trigger-state"); return s.getAttribute("aria-live") + ":" + s.textContent })()`)) === "polite:" + SENT);
   await click("annotation-cancel");
   await waitFor(`document.getElementById("annotation-go").textContent === "Go"`);
   check("cancel removed ready file", !fs.existsSync(ready), await ui());
@@ -146,7 +149,7 @@ run(async () => {
   check("settings.json hold_reload true", JSON.parse(fs.readFileSync(settingsFile, "utf8")).hold_reload === true, fs.readFileSync(settingsFile, "utf8").trim());
   await ev(`document.getElementById("settings-menu").hidePopover()`);
   await click("annotation-go");
-  await waitFor(`document.getElementById("annotation-go").textContent === "Sent → :${port}"`);
+  await waitSent();
   fs.appendFileSync(md, "\nheld line\n");
   await sleep(2000);
   check("hold on + sent: md write did not reload", (await ui()).marker === "m1");
@@ -162,7 +165,7 @@ run(async () => {
   const child = spawn("sleep", ["60"], { stdio: "ignore" });
   fs.writeFileSync(sleepPidFile, String(child.pid));
   await click("annotation-go");
-  await waitFor(`document.getElementById("annotation-go").textContent === "Sent → :${port}"`);
+  await waitSent();
   fs.writeFileSync(ready, JSON.stringify({ sent_at: new Date().toISOString(), pid: child.pid, claimed_at: new Date().toISOString() }));
   await waitFor(`document.getElementById("annotation-go").textContent === "Agent working · pid ${child.pid}"`);
   // The liveness poll leaves a selection in the list alone.
@@ -194,7 +197,7 @@ run(async () => {
 
   // Hold off: same situation, reload at once.
   await click("annotation-go");
-  await waitFor(`document.getElementById("annotation-go").textContent === "Sent → :${port}"`);
+  await waitSent();
   await ev(`document.querySelector("input[name=settings-hold_reload]").click()`);
   await waitFor(`document.documentElement.getAttribute("data-hold-reload") === "false"`);
   await sleep(300);
@@ -266,7 +269,7 @@ run(async () => {
 
   // The agent deletes the entry of the open box; only the poll sees it.
   await click("annotation-go");
-  await waitFor(`document.getElementById("annotation-go").textContent === "Sent → :${port}"`);
+  await waitSent();
   fs.writeFileSync(ready, JSON.stringify({ sent_at: new Date().toISOString(), pid: process.pid, claimed_at: new Date().toISOString() }));
   await waitFor(`document.getElementById("annotation-go").textContent === "Agent working · pid ${process.pid}"`);
   await settle();

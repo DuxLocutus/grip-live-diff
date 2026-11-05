@@ -12,6 +12,7 @@ if (!work) {
 }
 const docs = path.join(work, "docs");
 const sidecar = path.join(docs, "route.annotations.json5");
+const ready = path.join(docs, "route.annotations.ready");
 const pageA = `http://127.0.0.1:${portA}/route.md`;
 const pageB = `http://127.0.0.1:${portB}/docs/route.md`;
 const cdp = `http://127.0.0.1:${cdpPort}`;
@@ -29,6 +30,18 @@ function registryFiles(pid) {
     .filter((d) => fs.existsSync(path.join(work, d)))
     .flatMap((d) => fs.readdirSync(path.join(work, d), { recursive: true }))
     .filter((f) => f.endsWith(`instances${path.sep}${pid}.json`));
+}
+
+// heartbeatOfA resolves once A rewrote its registry file after since. A learns from its
+// heartbeat, not from a GET, that an instance came or went.
+async function heartbeatOfA(since) {
+  const pidA = /\(pid (\d+)\)/.exec(fs.readFileSync(path.join(work, "server.log"), "utf8"))[1];
+  const [file] = registryFiles(pidA);
+  const home = ["home", "cache"].map((d) => path.join(work, d, file)).find((f) => fs.existsSync(f));
+  for (const t0 = Date.now(); Date.parse(JSON.parse(fs.readFileSync(home, "utf8")).seen_at) <= since; ) {
+    if (Date.now() - t0 > 20000) throw new Error("no heartbeat of A within 20 s");
+    await sleep(200);
+  }
 }
 
 // startB runs B on the docs directory, with the HOME of A, its output in <work>/b.log for
@@ -61,6 +74,10 @@ function startB() {
 
 run(async () => {
   await connect(cdpPort);
+  // Registered before annotate.js: swallows the websocket's sidecar event while __blockAnn.
+  await send("Page.addScriptToEvaluateOnNewDocument", { source: `
+    window.__blockAnn = false;
+    window.addEventListener("gld:annotations", (e) => { if (window.__blockAnn) e.stopImmediatePropagation(); }, true);` });
   await send("Page.navigate", { url: pageA });
   await waitFor(`document.readyState === "complete" && !!document.querySelector(".annotations-banner")`);
   // Runtime.enable replays what the page logged before: the 010 run's forced error.
@@ -68,15 +85,30 @@ run(async () => {
   await ev(`window.__marker = "a1"`);
   check("page open in A only: no banner", !(await banner()).shown, await banner());
 
-  // B starts and opens the page in a second tab.
+  // Manual, and a batch a live agent works on: the page polls every 5 s.
+  await ev(`document.getElementById("annotate-toggle").click()`);
+  await waitFor(`!document.getElementById("annotation-mode").hidden`);
+  await ev(`document.getElementById("annotation-mode").click()`);
+  await waitFor(`document.getElementById("annotation-mode").textContent === "manual"`);
+  fs.writeFileSync(ready, JSON.stringify({ sent_at: new Date().toISOString(), pid: process.pid, claimed_at: new Date().toISOString() }));
+  await waitFor(`document.getElementById("annotation-go").textContent === "Agent working · pid ${process.pid}"`);
+
+  // B starts. Once a heartbeat of A has seen it live, and told the page, B opens the page in a
+  // second tab with the websocket event swallowed: only the poll can draw the banner.
   const b = await startB();
   check("B's registry file written", registryFiles(b.pid).length === 1, registryFiles(b.pid));
+  await heartbeatOfA(Date.now());
+  await sleep(500);
+  await ev(`window.__blockAnn = true`);
   const tab = await (await fetch(`${cdp}/json/new?${encodeURIComponent(pageB)}`, { method: "PUT" })).json();
   const t0 = Date.now();
   const shown = await waitFor(`(() => { const b = document.querySelector(".annotations-banner"); return !b.hidden })()`, 30000).catch(() => -1);
   const bn = await banner();
-  check("banner in A within 30 s, no reload (" + (Date.now() - t0) + " ms)", shown >= 0 && bn.marker === "a1" && bn.text.includes("Also open in :" + portB), bn);
+  check("banner in A within 30 s, by the poll, no reload (" + (Date.now() - t0) + " ms)", shown >= 0 && bn.marker === "a1" && bn.text.includes("Also open in :" + portB), bn);
   check("selector defaults to A", bn.via === portA, bn);
+  await ev(`window.__blockAnn = false`);
+  await ev(`document.getElementById("annotation-cancel").click()`);
+  await waitFor(`document.getElementById("annotation-go").textContent === "Go"`);
 
   // Send to B.
   await ev(`(() => { const s = document.querySelector(".annotations-banner select"); s.value = "${portB}"; s.dispatchEvent(new Event("change")) })()`);

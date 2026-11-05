@@ -829,7 +829,7 @@ func TestGoNamesTheInstance(t *testing.T) {
 
 	rec := rf.readyVia(portB)
 	var resp readyResponse
-	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &resp) != nil || resp.Via != portB || resp.State != readySent || !reflect.DeepEqual(resp.Targets, []int{portA, portB}) {
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &resp) != nil || resp.Ready.Via != portB || resp.Ready.State != readySent || !reflect.DeepEqual(resp.Targets, []int{portA, portB}) {
 		t.Fatalf("expected the batch sent to B, got %d %s", rec.Code, rec.Body)
 	}
 	if got := rf.getAnnotations().Ready; got.Via != portB {

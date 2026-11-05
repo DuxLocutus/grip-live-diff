@@ -59,10 +59,10 @@ type readyState struct {
 	Via    int     `json:"via,omitempty"`
 }
 
-// readyResponse is the ready state with the registry read, as the annotations GET has it.
+// readyResponse is the ready state with the registry read, as the annotations GET has them.
 type readyResponse struct {
-	readyState
 	routingInfo
+	Ready readyState `json:"ready"`
 }
 
 // readyPath is the ready file beside target's sidecar, confined like it.
@@ -284,7 +284,7 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request, dir http.Di
 
 	setNoCacheHeaders(w)
 	w.Header().Set("Content-Type", "application/json")
-	resp := readyResponse{readyState: st, routingInfo: info}
+	resp := readyResponse{routingInfo: info, Ready: st}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		log.Println(err)
 	}

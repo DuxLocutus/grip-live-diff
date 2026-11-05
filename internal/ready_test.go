@@ -310,8 +310,8 @@ func TestReadyPost(t *testing.T) {
 			if fi, err := os.Stat(filepath.Join(f.dir, readyName)); runtime.GOOS != "windows" && (err != nil || fi.Mode().Perm() != 0o644) {
 				t.Fatalf("expected the ready file 0644, got %v %v", fi.Mode(), err)
 			}
-			var st readyState
-			if json.Unmarshal(rec.Body.Bytes(), &st) != nil || st.State != readySent || st.PID != nil {
+			var resp readyResponse
+			if json.Unmarshal(rec.Body.Bytes(), &resp) != nil || resp.Ready.State != readySent || resp.Ready.PID != nil {
 				t.Fatalf("expected the response to report sent, got %s", rec.Body)
 			}
 		})

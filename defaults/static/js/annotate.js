@@ -390,7 +390,7 @@
         return r.json().then(function (st) {
           triggerError("");
           if (!fresh(n)) return;
-          doc.ready = { state: st.state, pid: st.pid, sent_at: st.sent_at, via: st.via };
+          doc.ready = st.ready;
           routed(st);
           draw();
           release();

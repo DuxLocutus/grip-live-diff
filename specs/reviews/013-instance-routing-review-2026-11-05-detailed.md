@@ -400,3 +400,4 @@ Revue de [013-instance-routing](../013-instance-routing.md). Commande `review-lo
 
 | Tour | Périmètre | Angles lancés | Critical | High | Medium | Low | Hors niveau | fix | new | old | Angles actifs ensuite |
 |---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | `e24fad1..b5a576a` | functional, tests, code-quality × M1 M2 M3 ; security, resiliency, docs | 0 | 2 | 21 | 9 | 1 | 4 | 29 | 0 | functional |

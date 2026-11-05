@@ -82,12 +82,14 @@ func (p Pending) owns() func(key string, via int) bool {
 }
 
 // findSidecars maps each path to sidecars: a directory to the ones under it, a markdown or
-// ready file to the sidecar beside it. A directory that cannot be read is reported on errOut and skipped.
+// ready file to the sidecar beside it. A directory that cannot be read is reported on errOut and
+// skipped.
 func findSidecars(paths []string, errOut io.Writer) ([]string, error) {
 	var out []string
 	for _, p := range paths {
 		if info, err := os.Stat(p); err == nil && info.IsDir() {
-			// The trailing separator makes WalkDir follow a symlinked directory: it Lstats its root.
+			// The trailing separator makes WalkDir follow a symlinked directory: it Lstats its
+			// root.
 			err := filepath.WalkDir(p+string(filepath.Separator), func(q string, d fs.DirEntry, err error) error {
 				if err != nil {
 					// An unreadable entry must not hide the sidecars of the others.

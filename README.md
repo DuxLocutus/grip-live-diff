@@ -170,15 +170,16 @@ markdown rewritten once, switch the document to **manual** with the auto / manua
 annotation row:
 
 - comments pile up; **Go**, enabled once an entry is open (not done, last message yours), writes
-  `<name>.annotations.ready` beside the sidecar: `{ "sent_at": <RFC 3339>, "pid": null, "via": <port> }`,
-  `via` absent when routing is off;
-- the agent claims it with `grip-live-diff pending … --claim <its PID>` (below), which sets `pid` and
-  `claimed_at` under the sidecar's flock and fails if `pid` is already set; it handles the entries
-  the claim lists and deletes the file last. The PID is the one of its long-lived process: in Claude
-  Code the shell's `$PPID`;
-- the button reads **Sent → :port** until claimed, **Agent working · pid N** while that process lives,
-  **Agent gone · pid N** once it exited, where Go sends again; **✕** cancels the batch by removing
-  the file. The page follows the file without reloading, and checks a working agent every 5 s;
+  `<name>.annotations.ready` beside the sidecar:
+  `{ "sent_at": <RFC 3339>, "pid": null, "via": <port> }`, `via` absent when routing is off;
+- the agent claims it with `grip-live-diff pending … --claim <its PID>` (below), which sets `pid`
+  and `claimed_at` under the sidecar's flock and fails if `pid` is already set; it handles the
+  entries the claim lists and deletes the file last. The PID is the one of its long-lived process:
+  in Claude Code the shell's `$PPID`;
+- the button reads **Sent → :port** until claimed, **Agent working · pid N** while that process
+  lives, **Agent gone · pid N** once it exited, where Go sends again; **✕** cancels the batch by
+  removing the file. The page follows the file without reloading, and checks a working agent every
+  5 s;
 - a ready file in auto is stale: switching to auto, or any save in auto, drops it;
 - with **Hold reload while sent** on in the settings menu, a markdown change waits while the batch
   is sent or worked on, then reloads once the file is gone or the agent is.
@@ -212,9 +213,9 @@ grip-live-diff pending --port 6420 --pid 4242 --claim "$PPID" docs/specs/toto.an
 ```
 
 The port and PID are those of the start line of the instance the agent started. In manual mode a
-`<sidecar><TAB>ready` line comes first when the batch is the instance's and unclaimed; `--claim` takes
-it and prints the entries of the batch; it takes one sidecar. A sidecar that cannot be read is
-reported on stderr and skipped. An instance whose PID is dead owns nothing; one that runs
+`<sidecar><TAB>ready` line comes first when the batch is the instance's and unclaimed; `--claim`
+takes it and prints the entries of the batch; it takes one sidecar. A sidecar that cannot be read
+is reported on stderr and skipped. An instance whose PID is dead owns nothing; one that runs
 without a registry file (read-only cache directory: routing off, logged once) owns every open
 entry. A Monitor script that wakes the agent only on a change of what it owns:
 
@@ -238,8 +239,8 @@ done
 | mode   | Trigger auto/manual of the document; in manual, **Go** sends the batch, ✕ cancels it                             |
 
 Keys: `d` toggles the diff, `1` `2` `3` pick the reference, `n` `p` walk the annotations, `a`
-annotates the selection, `A` comments on the whole document, `Esc` closes a comment box, `Ctrl-Enter`
-(`Cmd-Enter` on macOS) saves it.
+annotates the selection, `A` comments on the whole document, `Esc` closes a comment box,
+`Ctrl-Enter` (`Cmd-Enter` on macOS) saves it.
 
 Width, theme and the reload hold are kept in `settings.json` under the user config directory
 (`~/.config/grip-live-diff/` on Linux, `~/Library/Application Support/grip-live-diff/` on macOS,

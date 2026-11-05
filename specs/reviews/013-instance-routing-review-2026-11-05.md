@@ -12,9 +12,9 @@ reviewed: specs/013-instance-routing.md
 
 # Revue de code · feat/instance-routing, 2026-11-05
 
-Revue de la branche `feat/instance-routing` (spec 013) depuis `develop`. En cours : le tour 1 donne 33 findings, 31 à corriger, 2 sans suite ; aucune question nouvelle.
+Revue de la branche `feat/instance-routing` (spec 013) depuis `develop`. Deux tours : 33 findings au tour 1, 31 corrigés, 2 sans suite ; le tour 2 sur les corrections est sec. Une question vous attend, ouverte avant la revue.
 
-Revue de [013-instance-routing](../013-instance-routing.md). Commande `review-loop 3 iteration`. Base `e24fad1`, HEAD de départ `ea1c44f`, HEAD de fin : en cours. Angles : functional, tests, code-quality (par module M1 registry & pending, M2 serveur, M3 page), security, resiliency, docs. Arrêt : en cours. Contrôles : en cours.
+Revue de [013-instance-routing](../013-instance-routing.md). Commande `review-loop 3 iteration`. Base `e24fad1`, HEAD de départ `ea1c44f`, HEAD de fin `70c9576`. Angles : functional, tests, code-quality (par module M1 registry & pending, M2 serveur, M3 page), security, resiliency, docs. Arrêt : tour sans correction, tous les angles secs (tour 2). Contrôles : `go test -count=1 ./... && GOOS=windows go build ./... && golangci-lint run && gofmt -l . && scripts/e2e/run.sh` : ok sur `4bdc6ac` (la suite ne change que des documents de revue).
 
 ## Ce qui vous attend
 

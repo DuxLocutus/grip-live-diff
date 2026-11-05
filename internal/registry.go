@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"maps"
 	"math"
 	"net/http"
 	"os"
@@ -285,13 +286,10 @@ func (g *registry) path() string {
 
 // self is this instance as the others read it, with the pages open.
 func (g *registry) self(open map[string]string) instance {
-	keys := []string{}
-	for _, k := range open {
-		if !slices.Contains(keys, k) {
-			keys = append(keys, k)
-		}
+	keys := slices.Compact(slices.Sorted(maps.Values(open)))
+	if keys == nil {
+		keys = []string{} // [] in JSON, not null
 	}
-	sort.Strings(keys)
 	return instance{PID: g.pid, Port: g.port, Root: g.root, SeenAt: time.Now().Format(time.RFC3339), Pages: keys}
 }
 

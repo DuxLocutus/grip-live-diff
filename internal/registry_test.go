@@ -154,7 +154,7 @@ func TestPageKey(t *testing.T) {
 	if target := pageKey(http.Dir(filepath.Join(tmp, "other")), "/target.md"); alias == target {
 		t.Errorf("a symlinked file shares the key of its target: %q", alias)
 	}
-	if root := instanceRoot(filepath.Join(tmp, "real", "docs")); !contains(root, alias) {
+	if root := instanceRoot(filepath.Join(tmp, "real", "docs")); !under(root, alias) {
 		t.Errorf("expected the root %q to contain the link %q", root, alias)
 	}
 	if root := instanceRoot(filepath.Join(tmp, "link", "docs", "doc.md")); root != filepath.Join(tmp, "real", "docs") {
@@ -170,8 +170,8 @@ func TestPageKey(t *testing.T) {
 		{"/w/docs", "/w/docs-old/a.md", false},
 		{"/", "/a.md", true},
 	} {
-		if got := contains(filepath.FromSlash(tc.root), filepath.FromSlash(tc.key)); got != tc.want {
-			t.Errorf("contains(%q, %q): expected %v", tc.root, tc.key, tc.want)
+		if got := under(filepath.FromSlash(tc.root), filepath.FromSlash(tc.key)); got != tc.want {
+			t.Errorf("under(%q, %q): expected %v", tc.root, tc.key, tc.want)
 		}
 	}
 }

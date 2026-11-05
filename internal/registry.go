@@ -91,8 +91,8 @@ func instanceRoot(arg string) string {
 	return resolveDir(arg)
 }
 
-// contains tells whether key is under root.
-func contains(root, key string) bool {
+// under tells whether key is under root.
+func under(root, key string) bool {
 	rel, err := filepath.Rel(root, key)
 	return err == nil && filepath.IsLocal(rel)
 }
@@ -171,7 +171,7 @@ type peers struct {
 func (p peers) owner(key string, via int) int {
 	first := 0
 	for _, in := range p.live {
-		if !contains(in.Root, key) {
+		if !under(in.Root, key) {
 			continue
 		}
 		if in.Port == via {
@@ -195,12 +195,12 @@ func (p peers) owns(key string, via, port int) bool {
 func (p peers) targets(key string) []int {
 	out := []int{}
 	for _, in := range p.live {
-		if in.Port == p.self && contains(in.Root, key) {
+		if in.Port == p.self && under(in.Root, key) {
 			out = append(out, in.Port)
 		}
 	}
 	for _, in := range p.live {
-		if in.Port != p.self && contains(in.Root, key) && slices.Contains(in.Pages, key) {
+		if in.Port != p.self && under(in.Root, key) && slices.Contains(in.Pages, key) {
 			out = append(out, in.Port)
 		}
 	}

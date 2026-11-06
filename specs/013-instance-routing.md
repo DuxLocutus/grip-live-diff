@@ -3,7 +3,6 @@
 **Status**: shipped
 **Requested by**: babs
 **Date**: 2026-11-04
-**Reviews**: [code review 2026-11-05](reviews/013-instance-routing-review-2026-11-05.md)
 
 Supersedes the claim of [010](010-manual-trigger.md): the agent claims with `pending --claim`.
 

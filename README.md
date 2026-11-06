@@ -199,7 +199,8 @@ A page open in another instance shows a banner above the document, *Also open in
 [:6420 (this page)]*, whose selector picks the instance whose agent gets the next message; the
 choice is kept per tab and document. The server stamps each new reader message with `via`, the
 port it is routed to: the one chosen, if that instance has the page open and its root contains the
-file, else this instance, else the live instance of lowest port whose root contains it. A message
+file, else this instance if its root contains the file, else the lowest port among the others that
+have the page open and contain it, else the live instance of lowest port whose root contains it. A message
 routed elsewhere shows **→ :port**, **(gone)** once that instance stopped; the next save hands it to
 the live instance of lowest port whose root contains the file. **Go** names the instance the same
 way and is refused when the batch is another instance's or nothing open is routed to it.
@@ -215,14 +216,18 @@ grip-live-diff pending --port 6420 --pid 4242 --claim "$PPID" docs/specs/toto.an
 The port and PID are those of the start line of the instance the agent started. In manual mode a
 `<sidecar><TAB>ready` line comes first when the batch is the instance's and unclaimed; `--claim`
 takes it and prints the entries of the batch; it takes one sidecar. A sidecar that cannot be read
-is reported on stderr and skipped. An instance whose PID is dead owns nothing; one that runs
-without a registry file (read-only cache directory: routing off, logged once) owns every open
-entry. A Monitor script that wakes the agent only on a change of what it owns:
+is reported on stderr and skipped. A ready file stands for its sidecar. A missing sidecar or
+ready file is no entry yet, as an auto sidecar goes with its last entry; a missing directory or
+markdown file is exit 2. An instance whose PID is dead owns nothing; one that runs without a
+registry file (read-only cache directory: routing off, logged once) owns every open entry, and
+`pending` says so on stderr: a different `XDG_CACHE_HOME` than the instance's gives the same. A
+Monitor script that wakes the agent only on a change of what it owns, and stops with its instance:
 
 ```bash
 last=
 while sleep 2; do
   now=$(grip-live-diff pending --port 6420 --pid 4242 docs/specs)
+  [ $? -eq 2 ] && exit 2
   [ -n "$now" ] && [ "$now" != "$last" ] && printf '%s\n' "$now"
   last=$now
 done

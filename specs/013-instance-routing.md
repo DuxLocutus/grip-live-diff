@@ -122,16 +122,18 @@ computed in one place, by gld, not by each agent's script.
   The owner of a ready file is the owner rule applied to its `via`. A sidecar that cannot be read
   is reported on stderr and skipped. Exit 0 when a line is printed, 1 when none, 2 when the
   instance is gone, a path does not exist or an argument is wrong: a Monitor that loops on 1 stops.
+  A ready file stands for its sidecar. A missing sidecar or ready file whose directory stands is
+  no entry yet: an auto sidecar goes with its last entry.
   The instance is
   `--port` and `--pid`:
   - its PID is dead: nothing is owned, stderr says the instance is gone, exit 2;
   - its PID is alive and the registry holds no file for it (registry off: the start writes the file
-    before the start line): it owns every open entry, today's behaviour;
+    before the start line): it owns every open entry, today's behaviour, and says so on stderr;
   - its file is there but not live (stopped, asleep), or names another port: nothing is owned.
   `pending` removes the dead files of the registry, as a start does.
-- `grip-live-diff pending … --claim <agent pid> <sidecar>`: under the flock of the sidecar, checks
-  again that the trigger is manual and the ready file stands, has `pid` null and is owned by the
-  instance, then writes `pid` and `claimed_at` and prints the lines as `pending` does; exit 1 and
+- `grip-live-diff pending … --claim <agent pid> <sidecar>`: under the flock of the sidecar, reads
+  the registry and checks again that the trigger is manual and the ready file stands, has `pid`
+  null and is owned by the instance, then writes `pid` and `claimed_at` and prints the lines as `pending` does; exit 1 and
   nothing written otherwise. The agent does not take the flock around it.
 - The sidecar header tells the agent: run `grip-live-diff pending --port <port> --pid <pid>` on the
   file, with the port and PID of the start line of the instance you started; handle only the entries

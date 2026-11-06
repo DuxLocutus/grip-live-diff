@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +22,7 @@ type pendingFixture struct {
 	dir, reg   string
 	pidA, pidB int64
 	sidecar    string
+	dying      *exec.Cmd // an instance a test kills
 }
 
 func newPendingFixture(t *testing.T) *pendingFixture {
@@ -116,6 +119,12 @@ func TestPending(t *testing.T) {
 		if !reflect.DeepEqual(ids, tc.want) {
 			t.Errorf("%s: expected %v, got %v", tc.name, tc.want, ids)
 		}
+	}
+	if _, _, stderr := pf.run(portC, noFile, 0); !strings.Contains(stderr, "routing off") {
+		t.Errorf("expected stderr to say routing is off, got %q", stderr)
+	}
+	if _, _, stderr := pf.run(portA, pf.pidA, 0); stderr != "" {
+		t.Errorf("expected nothing on stderr for a registered instance, got %q", stderr)
 	}
 	if _, _, stderr := pf.run(portC, dead, 0); !strings.Contains(stderr, "gone") {
 		t.Errorf("expected stderr to say the instance is gone, got %q", stderr)
@@ -282,6 +291,88 @@ func TestPendingClaimWaitsForTheLock(t *testing.T) {
 	}
 }
 
+// 013-AC12: --claim reads the registry once it holds the lock: what changed while it waited
+// decides, not what it read before.
+func TestPendingClaimReadsTheRegistryUnderTheLock(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name   string
+		via    int
+		port   int
+		setup  func(pf *pendingFixture) int64 // before the claim, returns the claiming PID
+		change func(pf *pendingFixture)       // while the claim waits
+	}{
+		{"a lower port registers and takes a gone via", 7000, portB,
+			func(pf *pendingFixture) int64 {
+				if err := os.Remove(filepath.Join(pf.reg, strconv.FormatInt(pf.pidA, 10)+".json")); err != nil {
+					pf.t.Fatal(err)
+				}
+				return pf.pidB
+			},
+			func(pf *pendingFixture) {
+				writeInstance(pf.t, pf.reg, instance{PID: pf.pidA, Port: portA, Root: pf.dir})
+			}},
+		{"its own file goes stale", portA, portA,
+			func(pf *pendingFixture) int64 { return pf.pidA },
+			func(pf *pendingFixture) {
+				writeInstance(pf.t, pf.reg, instance{PID: pf.pidA, Port: portA, Root: pf.dir, SeenAt: time.Now().Add(-2 * registryLive).Format(time.RFC3339)})
+			}},
+		{"it dies, its file purged", portA, portA,
+			func(pf *pendingFixture) int64 {
+				pf.dying = exec.Command(os.Args[0], "-test.run=^TestSleepHelper$") //nolint:gosec // the test binary itself
+				pf.dying.Env = append(os.Environ(), "GLD_TEST_SLEEP=1")
+				if err := pf.dying.Start(); err != nil {
+					pf.t.Fatal(err)
+				}
+				pf.t.Cleanup(func() { _ = pf.dying.Process.Kill() })
+				pid := int64(pf.dying.Process.Pid)
+				if err := os.Remove(filepath.Join(pf.reg, strconv.FormatInt(pf.pidA, 10)+".json")); err != nil {
+					pf.t.Fatal(err)
+				}
+				writeInstance(pf.t, pf.reg, instance{PID: pid, Port: portA, Root: pf.dir})
+				return pid
+			},
+			func(pf *pendingFixture) {
+				_ = pf.dying.Process.Kill()
+				_ = pf.dying.Wait()
+			}},
+		{"its file names another port", portA, portA,
+			func(pf *pendingFixture) int64 { return pf.pidA },
+			func(pf *pendingFixture) {
+				writeInstance(pf.t, pf.reg, instance{PID: pf.pidA, Port: portC, Root: pf.dir})
+			}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			pf := newPendingFixture(t)
+			pf.write(triggerManual)
+			pf.ready(fmt.Sprintf(`{sent_at: "2026-11-04T10:00:00Z", pid: null, via: %d}`, tc.via))
+			pid := tc.setup(pf)
+			held, err := lockSidecar(pf.sidecar, os.O_RDONLY, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd, _, _ := pf.pending(tc.port, pid, livePID(t), pf.sidecar)
+			done := make(chan bool, 1)
+			go func() {
+				found, _ := cmd.Run()
+				done <- found
+			}()
+			time.Sleep(200 * time.Millisecond)
+			tc.change(pf)
+			releaseSidecar(held)
+			if found := <-done; found {
+				t.Fatal("expected the claim refused")
+			}
+			if rf, err := loadReady(filepath.Join(pf.dir, readyName)); err != nil || rf.PID != nil {
+				t.Fatalf("expected no pid written, got %+v %v", rf, err)
+			}
+		})
+	}
+}
+
 func TestFindSidecarsSkipsAnUnreadableDirectory(t *testing.T) {
 	t.Parallel()
 
@@ -314,16 +405,26 @@ func TestFindSidecars(t *testing.T) {
 		dir,
 		filepath.Join(dir, "sub", "b.md"),
 		filepath.Join(dir, "sub", "b.annotations.ready"),
-		filepath.Join(dir, "missing.annotations.json5"),
 	}, io.Discard)
 	want := []string{
 		filepath.Join(dir, "a.annotations.json5"),
 		filepath.Join(dir, "sub", "b.annotations.json5"),
 		filepath.Join(dir, "sub", "b.annotations.json5"),
 		filepath.Join(dir, "sub", "b.annotations.json5"),
-		filepath.Join(dir, "missing.annotations.json5"),
 	}
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("expected %v, got %v %v", want, got, err)
+	}
+	// A missing sidecar or ready file is no entry yet; a missing directory or markdown file, or
+	// the directory of a sidecar, is an error.
+	for _, missing := range []string{"missing.annotations.json5", "missing.annotations.ready"} {
+		if got, err := findSidecars([]string{filepath.Join(dir, missing)}, io.Discard); err != nil || len(got) != 1 {
+			t.Errorf("%s: expected its sidecar, got %v %v", missing, got, err)
+		}
+	}
+	for _, missing := range []string{"missing", "missing.md", "nodir/a.annotations.json5", "nodir/a.annotations.ready"} {
+		if _, err := findSidecars([]string{filepath.Join(dir, missing)}, io.Discard); err == nil {
+			t.Errorf("%s: expected an error", missing)
+		}
 	}
 }

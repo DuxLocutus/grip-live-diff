@@ -51,15 +51,25 @@ func TestPendingExitCode(t *testing.T) {
 		{"a.annotations.json5", dead, 2, ""},
 		{"missing", pid, 2, ""},
 		{"--port=x", pid, 2, ""},
+		{"missing.annotations.json5", pid, 1, ""},
+		{"missing.annotations.ready", pid, 1, ""},
+		{"nodir/a.annotations.json5", pid, 2, ""},
+		{"a.annotations.ready", pid, 0, "\te1\n"},
+		{"--claim=0", pid, 2, ""},
+		{"--claim=-1", pid, 2, ""},
+		{"--port=0", pid, 2, ""},
+		{"--port=-1", pid, 2, ""},
+		{"--port=65536", pid, 2, ""},
 	} {
-		arg := filepath.Join(dir, tc.file)
+		args := []string{"pending", "--port", "6419", "--pid", tc.pid, filepath.Join(dir, tc.file)}
 		if strings.HasPrefix(tc.file, "--") {
-			arg = tc.file
+			// A flag case: the last --port wins, and a.annotations.json5 alone would exit 0.
+			args = append(args[:len(args)-1], tc.file, filepath.Join(dir, "a.annotations.json5"))
 		}
 		home := t.TempDir()
 		cmd := exec.Command(os.Args[0], "-test.run=^TestPendingHelper$") //nolint:gosec // the test binary itself
 		cmd.Env = append(os.Environ(), "HOME="+home, "XDG_CACHE_HOME="+home, "LOCALAPPDATA="+home,
-			"GLD_TEST_PENDING_ARGS="+strings.Join([]string{"pending", "--port", "6419", "--pid", tc.pid, arg}, "\n"))
+			"GLD_TEST_PENDING_ARGS="+strings.Join(args, "\n"))
 		out, err := cmd.Output()
 		code := 0
 		var exit *exec.ExitError

@@ -36,7 +36,6 @@ func (p Pending) Run() (bool, error) {
 		scanRegistry(p.Registry)
 		return false, fmt.Errorf("%w: :%d (pid %d), nothing is its own", ErrInstanceGone, p.Port, p.PID)
 	}
-	owns := p.owns()
 	sidecars, err := findSidecars(p.Paths, p.Err)
 	if err != nil {
 		return false, err
@@ -44,9 +43,14 @@ func (p Pending) Run() (bool, error) {
 	if p.Claim != 0 && len(sidecars) != 1 {
 		return false, fmt.Errorf("--claim takes one sidecar, got %d", len(sidecars))
 	}
+	owner := p.owns
+	if p.Claim == 0 {
+		owns := p.owns()
+		owner = func() func(string, int) bool { return owns }
+	}
 	found := false
 	for _, sc := range sidecars {
-		lines, err := pendingLines(sc, owns, p.Claim)
+		lines, err := pendingLines(sc, owner, p.Claim)
 		if err != nil {
 			_, _ = fmt.Fprintln(p.Err, err)
 			continue
@@ -65,11 +69,18 @@ func (p Pending) Run() (bool, error) {
 // it, the instance runs with routing off and owns everything; a file not seen for registryLive
 // is a stopped instance and owns nothing.
 func (p Pending) owns() func(key string, via int) bool {
+	// A claim reads it under the flock, after a wait the instance may not have survived.
+	if !pidAlive(p.PID) {
+		return func(string, int) bool { return false }
+	}
 	all := scanRegistry(p.Registry)
 	now := time.Now()
 	i := slices.IndexFunc(all, func(in instance) bool { return in.PID == p.PID })
 	v := peers{} // routing off
-	if i >= 0 {
+	if i < 0 {
+		// Also what another cache dir than the instance's gives: say so, two agents would answer.
+		_, _ = fmt.Fprintf(p.Err, "no registry file for pid %d in %s: routing off, every open entry is its own\n", p.PID, p.Registry)
+	} else {
 		switch in := all[i]; {
 		case in.Port != p.Port:
 			_, _ = fmt.Fprintf(p.Err, "pid %d serves :%d, not :%d: nothing is its own\n", p.PID, in.Port, p.Port)
@@ -90,8 +101,13 @@ func findSidecars(paths []string, errOut io.Writer) ([]string, error) {
 	var out []string
 	for _, p := range paths {
 		info, err := os.Stat(p)
-		if errors.Is(err, fs.ErrNotExist) && !strings.HasSuffix(p, sidecarSuffix) && !strings.HasSuffix(p, readySuffix) {
-			return nil, fmt.Errorf("%s: no such file or directory", p)
+		if errors.Is(err, fs.ErrNotExist) {
+			// An auto sidecar goes with its last entry, a ready file with its batch: no entry, as
+			// long as their directory stands.
+			named := strings.HasSuffix(p, sidecarSuffix) || strings.HasSuffix(p, readySuffix)
+			if dir, derr := os.Stat(filepath.Dir(p)); !named || derr != nil || !dir.IsDir() {
+				return nil, fmt.Errorf("%s: no such file or directory", p)
+			}
 		}
 		if err == nil && info.IsDir() {
 			// The trailing separator makes WalkDir follow a symlinked directory: it Lstats its
@@ -130,7 +146,8 @@ func findSidecars(paths []string, errOut io.Writer) ([]string, error) {
 // pendingLines is what the instance owns in the sidecar at p: its open entries in auto; in
 // manual, "ready" and those entries when the ready file is unclaimed and its own, nothing
 // otherwise. With claim, it writes claim as the PID of the ready file first, under the lock.
-func pendingLines(p string, owns func(key string, via int) bool, claim int64) ([]string, error) {
+// owner gives the owner rule, called once the lock is held.
+func pendingLines(p string, owner func() func(key string, via int) bool, claim int64) ([]string, error) {
 	flag, exclusive := os.O_RDONLY, false
 	if claim != 0 {
 		flag, exclusive = os.O_RDWR, true
@@ -143,6 +160,7 @@ func pendingLines(p string, owns func(key string, via int) bool, claim int64) ([
 		return nil, err
 	}
 	defer releaseSidecar(f)
+	owns := owner()
 	data, err := io.ReadAll(io.LimitReader(f, maxSidecarBytes))
 	if err != nil {
 		return nil, err

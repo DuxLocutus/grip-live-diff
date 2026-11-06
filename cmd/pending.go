@@ -25,6 +25,14 @@ unclaimed; --claim <agent pid> takes it, under the sidecar flock, and takes exac
 		port, _ := cmd.Flags().GetInt("port")
 		pid, _ := cmd.Flags().GetInt64("pid")
 		claim, _ := cmd.Flags().GetInt64("claim")
+		if port < 1 || port > 65535 {
+			// Port 0 reads as "no port" in the owner rule, which routing off would turn into all.
+			return fmt.Errorf("--port %d: not a port", port)
+		}
+		if cmd.Flags().Changed("claim") && claim <= 0 {
+			// 0 is "no claim" inside: a claim that takes nothing must not exit 0.
+			return fmt.Errorf("--claim %d: not a PID", claim)
+		}
 		found, err := internal.Pending{
 			Port:     port,
 			PID:      pid,

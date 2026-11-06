@@ -4,6 +4,7 @@ package internal
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -50,7 +51,7 @@ func TestServeHelper(t *testing.T) {
 	}
 	s := NewServer("localhost", 0, false, false, false, NewParser(), "")
 	s.UseRegistry(reg)
-	if err := s.Serve(docs); err != nil {
+	if err := s.Serve(docs); !errors.As(err, new(Stopped)) {
 		t.Fatal(err)
 	}
 }

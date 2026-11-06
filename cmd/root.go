@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"os"
+	"syscall"
 
 	"github.com/babs/grip-live-diff/internal"
 	"github.com/spf13/cobra"
@@ -26,7 +28,13 @@ var rootCmd = &cobra.Command{
 		parser := internal.NewParser()
 		server := internal.NewServer(host, port, boundingBox, browser, !noReload, parser, internal.DefaultSettingsPath())
 		server.UseRegistry(internal.DefaultRegistryDir())
-		return server.Serve(file)
+		err := server.Serve(file)
+		var stopped internal.Stopped
+		if errors.As(err, &stopped) {
+			// 128+n is what a shell reports for a process killed by signal n, as before the handler.
+			os.Exit(128 + int(stopped.Signal.(syscall.Signal)))
+		}
+		return err
 	},
 }
 

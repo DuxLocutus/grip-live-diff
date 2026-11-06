@@ -3,6 +3,7 @@ package internal
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"net/http"
@@ -176,6 +177,22 @@ func TestPageKey(t *testing.T) {
 	}
 }
 
+// A tick that runs after close, as a late page leave does, must not write the file again.
+func TestTickAfterCloseWritesNothing(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	g := newRegistry(dir, portA, "/nowhere", &bytes.Buffer{})
+	if err := g.start(); err != nil {
+		t.Fatal(err)
+	}
+	g.close()
+	g.tick()
+	if _, ok := readInstanceFile(t, dir, os.Getpid()); ok {
+		t.Fatal("expected no file after close")
+	}
+}
+
 // 013-AC4
 func TestScanRegistry(t *testing.T) {
 	t.Parallel()
@@ -186,6 +203,13 @@ func TestScanRegistry(t *testing.T) {
 	writeInstance(t, dir, instance{PID: int64(dead), Port: portA})
 	writeInstance(t, dir, instance{PID: live, Port: portC})
 	writeInstance(t, dir, instance{PID: stopped, Port: portB, SeenAt: time.Now().Add(-2 * registryLive).Format(time.RFC3339)})
+	// A file whose PID is not its name's: another process may hold that PID now.
+	other := livePID(t)
+	writeInstance(t, dir, instance{PID: live, Port: portA})
+	if err := os.Rename(filepath.Join(dir, strconv.FormatInt(live, 10)+".json"), filepath.Join(dir, strconv.FormatInt(other, 10)+".json")); err != nil {
+		t.Fatal(err)
+	}
+	writeInstance(t, dir, instance{PID: live, Port: portC})
 	// Not instance files: a temp file of replaceFile, a file of another name.
 	writeFile(t, dir, fmt.Sprintf(".%d.json-123", dead), "{}")
 	writeFile(t, dir, "notes.txt", "x")
@@ -331,8 +355,8 @@ func (inst *served) stop(t *testing.T) {
 		if !ok {
 			return
 		}
-		if err != nil {
-			t.Errorf("Serve: %v", err)
+		if !errors.As(err, new(Stopped)) {
+			t.Errorf("Serve: expected Stopped, got %v", err)
 		}
 		close(inst.done)
 	case <-time.After(5 * time.Second):

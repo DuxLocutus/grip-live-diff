@@ -271,10 +271,15 @@ func (s *Server) Serve(file string) error {
 	select {
 	case err := <-served:
 		return err
-	case <-signals:
-		return nil
+	case sig := <-signals:
+		return Stopped{sig}
 	}
 }
+
+// Stopped is what Serve returns once a signal stopped it and the registry file is removed.
+type Stopped struct{ Signal os.Signal }
+
+func (e Stopped) Error() string { return "stopped by " + e.Signal.String() }
 
 // startRegistry writes the file of this instance; routing stays off when it cannot.
 func (s *Server) startRegistry(dir http.Dir, root string) {
